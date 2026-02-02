@@ -1,26 +1,34 @@
 package app
 
 import (
+	"context"
+
 	"freepass-2026/internal/config"
-	"freepass-2026/internal/db"
+	db "freepass-2026/internal/db"
 	"freepass-2026/internal/http"
+	sqlc "freepass-2026/internal/sqlc/gen"
+
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func Build(cfg config.Config) (*gin.Engine, func(), error) {
-	conn, err := db.New(cfg.DatabaseURL)
+type App struct {
+	Cfg     config.Config
+	Pool    *pgxpool.Pool
+	Queries *sqlc.Queries
+	Engine  *gin.Engine
+}
+
+func Build(ctx context.Context) (*App, error) {
+	cfg, err := config.Load()
 	if err != nil {
-		return nil, func() {}, err
+		return nil, err
 	}
-	engine := gin.New()
-	engine.Use(gin.Recovery())
-	engine.Use(func(c *gin.Context) {
-		c.Set("db", conn)
-		c.Next()
-	})
-	http.RegisterRoutes(engine)
-	cleanup := func() {
-		_ = conn.Close()
+	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return nil, err
 	}
-	return engine, cleanup, nil
+	queries := sqlc.New(pool)
+	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool})
+	return &App{Cfg: cfg, Pool: pool, Queries: queries, Engine: engine}, nil
 }

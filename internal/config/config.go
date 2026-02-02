@@ -35,3 +35,7 @@ func getEnv(key, fallback string) string {
 	}
 	return value
 }
+
+func (c Config) Address() string {
+	return ":" + c.AppPort
+}
