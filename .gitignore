@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+bin/
+vendor/
+*.log
+*.out
+*.exe
+*.dll
+*.so
+*.dylib
+.vscode/
+.DS_Store
