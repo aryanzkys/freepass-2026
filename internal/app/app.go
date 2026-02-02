@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"freepass-2026/internal/auth"
 	"freepass-2026/internal/config"
 	db "freepass-2026/internal/db"
 	"freepass-2026/internal/http"
@@ -29,6 +30,7 @@ func Build(ctx context.Context) (*App, error) {
 		return nil, err
 	}
 	queries := sqlc.New(pool)
-	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool})
+	authService := auth.New(cfg.JWTSecret)
+	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool, Auth: authService})
 	return &App{Cfg: cfg, Pool: pool, Queries: queries, Engine: engine}, nil
 }

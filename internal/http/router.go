@@ -1,6 +1,7 @@
 package http
 
 import (
+	"freepass-2026/internal/auth"
 	"freepass-2026/internal/http/middleware"
 	db "freepass-2026/internal/sqlc/gen"
 
@@ -11,6 +12,7 @@ import (
 type Dependencies struct {
 	Queries *db.Queries
 	Pool    *pgxpool.Pool
+	Auth    *auth.Service
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -20,6 +22,11 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	engine.Use(gin.Recovery())
 	engine.Use(middleware.CORS())
 	h := NewHandler(deps.Queries, deps.Pool)
+	authHandler := NewAuthHandler(deps.Queries, deps.Auth)
 	engine.GET("/health", h.Health)
+	engine.POST("/auth/register", authHandler.Register)
+	engine.POST("/auth/login", authHandler.Login)
+	protected := engine.Group("/")
+	protected.Use(middleware.RequireAuth(deps.Auth))
 	return engine
 }
