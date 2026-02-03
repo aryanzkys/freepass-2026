@@ -16,6 +16,7 @@ type Dependencies struct {
 	Auth    *auth.Service
 	Canteen *handlers.CanteenHandler
 	Order   *handlers.OrderHandler
+	Payment *handlers.PaymentHandler
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -37,5 +38,6 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	orders := engine.Group("/orders")
 	orders.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("USER", "ADMIN"))
 	orders.POST("", deps.Order.CreateOrder)
+	orders.POST("/:orderId/payments", deps.Payment.CreatePayment)
 	return engine
 }
