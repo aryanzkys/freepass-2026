@@ -36,6 +36,10 @@ func paramKey(key string, fallback string) string {
 		return "order_id"
 	case "feedbackId", "feedback_id":
 		return "feedback_id"
+	case "ownerId", "owner_id":
+		return "owner_id"
+	case "userId", "user_id":
+		return "user_id"
 	default:
 		return "canteen_id"
 	}

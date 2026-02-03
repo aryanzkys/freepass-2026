@@ -20,6 +20,7 @@ type Dependencies struct {
 	Feedback   *handlers.FeedbackHandler
 	OwnerMenu  *handlers.OwnerMenuHandler
 	OwnerOrder *handlers.OwnerOrderHandler
+	Admin      *handlers.AdminHandler
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -48,5 +49,10 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	owner.GET("/orders", deps.OwnerOrder.ListIncomingOrders)
 	owner.PATCH("/orders/:orderId/status", deps.OwnerOrder.UpdateOrderStatus)
 	owner.DELETE("/feedbacks/:feedbackId", deps.Feedback.RemoveFeedbackAsOwner)
+	admin := engine.Group("/admin")
+	admin.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("ADMIN"))
+	admin.POST("/owners", deps.Admin.CreateOwner)
+	admin.PUT("/owners/:ownerId", deps.Admin.UpdateOwner)
+	admin.DELETE("/accounts/:userId", deps.Admin.DeleteAccount)
 	return engine
 }

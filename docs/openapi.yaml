@@ -1,0 +1,1118 @@
+openapi: 3.0.3
+info:
+  title: BCC Canteen API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        details:
+          nullable: true
+          oneOf:
+            - type: object
+            - type: "null"
+      required:
+        - message
+        - details
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        phone:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+      required:
+        - id
+        - name
+        - email
+        - role
+    UserWithTimestamps:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            created_at:
+              type: string
+            updated_at:
+              type: string
+          required:
+            - created_at
+            - updated_at
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - user
+    Canteen:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        location:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+        owner_id:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - name
+        - owner_id
+        - created_at
+        - updated_at
+    MenuItem:
+      type: object
+      properties:
+        id:
+          type: string
+        canteen_id:
+          type: string
+        name:
+          type: string
+        description:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+        price:
+          type: integer
+        stock:
+          type: integer
+        is_available:
+          type: boolean
+        avg_rating:
+          nullable: true
+          oneOf:
+            - type: number
+              format: float
+            - type: "null"
+        rating_count:
+          type: integer
+        is_recommended:
+          type: boolean
+        recommended_rank:
+          nullable: true
+          oneOf:
+            - type: integer
+            - type: "null"
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - canteen_id
+        - name
+        - price
+        - stock
+        - is_available
+        - rating_count
+        - is_recommended
+        - created_at
+        - updated_at
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        canteen_id:
+          type: string
+        payment_status:
+          type: string
+        order_status:
+          type: string
+        total_amount:
+          type: integer
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - user_id
+        - canteen_id
+        - payment_status
+        - order_status
+        - total_amount
+        - created_at
+        - updated_at
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        menu_item_id:
+          type: string
+        qty:
+          type: integer
+        price_snapshot:
+          type: integer
+        subtotal:
+          type: integer
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - order_id
+        - menu_item_id
+        - qty
+        - price_snapshot
+        - subtotal
+        - created_at
+        - updated_at
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        method:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+        amount:
+          type: integer
+        status:
+          type: string
+        paid_at:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - order_id
+        - amount
+        - status
+        - paid_at
+        - created_at
+        - updated_at
+    Feedback:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        user_id:
+          type: string
+        canteen_id:
+          type: string
+        rating:
+          nullable: true
+          oneOf:
+            - type: integer
+            - type: "null"
+        comment:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+        is_removed:
+          type: boolean
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - order_id
+        - user_id
+        - canteen_id
+        - is_removed
+        - created_at
+        - updated_at
+    ListResponseCanteen:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Canteen"
+      required:
+        - data
+    ListResponseMenuItem:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MenuItem"
+      required:
+        - data
+    ListResponseOrder:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+      required:
+        - data
+    CreateOrderResponse:
+      type: object
+      properties:
+        order:
+          $ref: "#/components/schemas/Order"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+      required:
+        - order
+        - items
+    PaymentOrderResponse:
+      type: object
+      properties:
+        payment:
+          $ref: "#/components/schemas/Payment"
+        order:
+          $ref: "#/components/schemas/Order"
+      required:
+        - payment
+        - order
+    FeedbackResponse:
+      type: object
+      properties:
+        feedback:
+          $ref: "#/components/schemas/Feedback"
+      required:
+        - feedback
+    AdminUserResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/UserWithTimestamps"
+      required:
+        - user
+    DeleteResponse:
+      type: object
+      properties:
+        deleted:
+          type: boolean
+      required:
+        - deleted
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+  /auth/register:
+    post:
+      summary: Register user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                phone:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+              required:
+                - name
+                - email
+                - password
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/login:
+    post:
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+              required:
+                - email
+                - password
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /canteens:
+    get:
+      summary: List canteens
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListResponseCanteen"
+  /canteens/{canteenId}/menus:
+    get:
+      summary: List menu items by canteen with ratings
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListResponseMenuItem"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders:
+    post:
+      summary: Create order
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                canteen_id:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      menu_item_id:
+                        type: string
+                      qty:
+                        type: integer
+                    required:
+                      - menu_item_id
+                      - qty
+              required:
+                - canteen_id
+                - items
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateOrderResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/payments:
+    post:
+      summary: Create payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                method:
+                  type: string
+                amount:
+                  type: integer
+              required:
+                - method
+                - amount
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentOrderResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/feedback:
+    post:
+      summary: Create feedback with ratings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      menu_item_id:
+                        type: string
+                      rating:
+                        type: integer
+                    required:
+                      - menu_item_id
+                      - rating
+              required:
+                - items
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /owner/canteens/{canteenId}/menus:
+    post:
+      summary: Create menu item
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+                price:
+                  type: integer
+                stock:
+                  type: integer
+                is_available:
+                  nullable: true
+                  oneOf:
+                    - type: boolean
+                    - type: "null"
+              required:
+                - name
+                - price
+                - stock
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /owner/canteens/{canteenId}/menus/{menuId}:
+    put:
+      summary: Update menu item
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: menuId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+                price:
+                  type: integer
+                stock:
+                  type: integer
+                is_available:
+                  type: boolean
+              required:
+                - name
+                - price
+                - stock
+                - is_available
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Delete menu item
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: menuId
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /owner/canteens/{canteenId}/orders:
+    get:
+      summary: List incoming orders
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListResponseOrder"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /owner/canteens/{canteenId}/orders/{orderId}/status:
+    patch:
+      summary: Update order status
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+              required:
+                - status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /owner/canteens/{canteenId}/feedbacks/{feedbackId}:
+    delete:
+      summary: Remove feedback
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: feedbackId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/owners:
+    post:
+      summary: Create canteen owner
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+                phone:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+              required:
+                - name
+                - email
+                - password
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/owners/{ownerId}:
+    put:
+      summary: Update canteen owner
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: ownerId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+                email:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+                password:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+                phone:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/accounts/{userId}:
+    delete:
+      summary: Delete account
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

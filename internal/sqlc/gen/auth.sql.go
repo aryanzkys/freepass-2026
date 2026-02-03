@@ -113,3 +113,82 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	)
 	return i, err
 }
+
+const updateUserAdminNoPassword = `-- name: UpdateUserAdminNoPassword :one
+UPDATE users
+SET name = $2,
+	email = $3,
+	phone = $4,
+	updated_at = now()
+WHERE id = $1
+RETURNING id, name, email, password_hash, role, phone, created_at, updated_at
+`
+
+type UpdateUserAdminNoPasswordParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Name  string      `json:"name"`
+	Email string      `json:"email"`
+	Phone pgtype.Text `json:"phone"`
+}
+
+func (q *Queries) UpdateUserAdminNoPassword(ctx context.Context, arg UpdateUserAdminNoPasswordParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserAdminNoPassword,
+		arg.ID,
+		arg.Name,
+		arg.Email,
+		arg.Phone,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Phone,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserAdminWithPassword = `-- name: UpdateUserAdminWithPassword :one
+UPDATE users
+SET name = $2,
+	email = $3,
+	phone = $4,
+	password_hash = $5,
+	updated_at = now()
+WHERE id = $1
+RETURNING id, name, email, password_hash, role, phone, created_at, updated_at
+`
+
+type UpdateUserAdminWithPasswordParams struct {
+	ID           pgtype.UUID `json:"id"`
+	Name         string      `json:"name"`
+	Email        string      `json:"email"`
+	Phone        pgtype.Text `json:"phone"`
+	PasswordHash string      `json:"password_hash"`
+}
+
+func (q *Queries) UpdateUserAdminWithPassword(ctx context.Context, arg UpdateUserAdminWithPasswordParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserAdminWithPassword,
+		arg.ID,
+		arg.Name,
+		arg.Email,
+		arg.Phone,
+		arg.PasswordHash,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.Phone,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
