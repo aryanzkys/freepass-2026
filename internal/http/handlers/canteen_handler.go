@@ -27,15 +27,19 @@ type canteenResponse struct {
 }
 
 type menuItemResponse struct {
-	ID          string  `json:"id"`
-	CanteenID   string  `json:"canteen_id"`
-	Name        string  `json:"name"`
-	Description *string `json:"description"`
-	Price       int32   `json:"price"`
-	Stock       int32   `json:"stock"`
-	IsAvailable bool    `json:"is_available"`
-	CreatedAt   string  `json:"created_at"`
-	UpdatedAt   string  `json:"updated_at"`
+	ID              string   `json:"id"`
+	CanteenID       string   `json:"canteen_id"`
+	Name            string   `json:"name"`
+	Description     *string  `json:"description"`
+	Price           int32    `json:"price"`
+	Stock           int32    `json:"stock"`
+	IsAvailable     bool     `json:"is_available"`
+	AvgRating       *float64 `json:"avg_rating"`
+	RatingCount     int32    `json:"rating_count"`
+	IsRecommended   bool     `json:"is_recommended"`
+	RecommendedRank *int32   `json:"recommended_rank"`
+	CreatedAt       string   `json:"created_at"`
+	UpdatedAt       string   `json:"updated_at"`
 }
 
 type listResponse[T any] struct {
@@ -98,23 +102,32 @@ func (h *CanteenHandler) ListMenusByCanteen(c *gin.Context) {
 		return
 	}
 
-	items, err := h.Queries.ListMenuItemsByCanteenID(c.Request.Context(), canteenUUID)
+	items, err := h.Queries.ListMenuItemsWithRatingsByCanteenID(c.Request.Context(), canteenUUID)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "internal_error", nil)
 		return
 	}
 	resp := make([]menuItemResponse, 0, len(items))
 	for _, item := range items {
+		var recommendedRank *int32
+		if item.IsRecommended {
+			rank := item.RecommendedRank
+			recommendedRank = &rank
+		}
 		resp = append(resp, menuItemResponse{
-			ID:          item.ID.String(),
-			CanteenID:   item.CanteenID.String(),
-			Name:        item.Name,
-			Description: textToPtr(item.Description),
-			Price:       item.Price,
-			Stock:       item.Stock,
-			IsAvailable: item.IsAvailable,
-			CreatedAt:   timeToString(item.CreatedAt),
-			UpdatedAt:   timeToString(item.UpdatedAt),
+			ID:              item.ID.String(),
+			CanteenID:       item.CanteenID.String(),
+			Name:            item.Name,
+			Description:     textToPtr(item.Description),
+			Price:           item.Price,
+			Stock:           item.Stock,
+			IsAvailable:     item.IsAvailable,
+			AvgRating:       floatToPtr(item.AvgRating),
+			RatingCount:     item.RatingCount,
+			IsRecommended:   item.IsRecommended,
+			RecommendedRank: recommendedRank,
+			CreatedAt:       timeToString(item.CreatedAt),
+			UpdatedAt:       timeToString(item.UpdatedAt),
 		})
 	}
 	c.JSON(http.StatusOK, listResponse[menuItemResponse]{Data: resp})
@@ -125,6 +138,14 @@ func textToPtr(t pgtype.Text) *string {
 		return nil
 	}
 	return &t.String
+}
+
+func floatToPtr(value pgtype.Float8) *float64 {
+	if !value.Valid {
+		return nil
+	}
+	val := value.Float64
+	return &val
 }
 
 func timeToString(t pgtype.Timestamptz) string {

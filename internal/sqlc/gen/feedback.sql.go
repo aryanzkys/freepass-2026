@@ -34,7 +34,7 @@ type CreateFeedbackParams struct {
 	OrderID   pgtype.UUID `json:"order_id"`
 	UserID    pgtype.UUID `json:"user_id"`
 	CanteenID pgtype.UUID `json:"canteen_id"`
-	Rating    int32       `json:"rating"`
+	Rating    pgtype.Int4 `json:"rating"`
 	Comment   pgtype.Text `json:"comment"`
 }
 
@@ -54,6 +54,56 @@ func (q *Queries) CreateFeedback(ctx context.Context, arg CreateFeedbackParams) 
 		&i.CanteenID,
 		&i.Rating,
 		&i.Comment,
+		&i.IsRemoved,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createMenuRating = `-- name: CreateMenuRating :one
+INSERT INTO menu_ratings (
+	id,
+	order_id,
+	menu_item_id,
+	user_id,
+	canteen_id,
+	rating
+) VALUES (
+	gen_random_uuid(),
+	$1,
+	$2,
+	$3,
+	$4,
+	$5
+)
+RETURNING id, order_id, menu_item_id, user_id, canteen_id, rating, is_removed, created_at, updated_at
+`
+
+type CreateMenuRatingParams struct {
+	OrderID    pgtype.UUID `json:"order_id"`
+	MenuItemID pgtype.UUID `json:"menu_item_id"`
+	UserID     pgtype.UUID `json:"user_id"`
+	CanteenID  pgtype.UUID `json:"canteen_id"`
+	Rating     int32       `json:"rating"`
+}
+
+func (q *Queries) CreateMenuRating(ctx context.Context, arg CreateMenuRatingParams) (MenuRating, error) {
+	row := q.db.QueryRow(ctx, createMenuRating,
+		arg.OrderID,
+		arg.MenuItemID,
+		arg.UserID,
+		arg.CanteenID,
+		arg.Rating,
+	)
+	var i MenuRating
+	err := row.Scan(
+		&i.ID,
+		&i.OrderID,
+		&i.MenuItemID,
+		&i.UserID,
+		&i.CanteenID,
+		&i.Rating,
 		&i.IsRemoved,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -84,33 +134,63 @@ func (q *Queries) GetFeedbackByOrderID(ctx context.Context, orderID pgtype.UUID)
 	return i, err
 }
 
-const listFeedbacksByCanteenID = `-- name: ListFeedbacksByCanteenID :many
-SELECT id, order_id, user_id, canteen_id, rating, comment, is_removed, created_at, updated_at
-FROM feedbacks
-WHERE canteen_id = $1 AND is_removed = false
-ORDER BY created_at DESC
+const getMenuRatingsByOrderID = `-- name: GetMenuRatingsByOrderID :many
+SELECT id, order_id, menu_item_id, user_id, canteen_id, rating, is_removed, created_at, updated_at
+FROM menu_ratings
+WHERE order_id = $1 AND is_removed = false
 `
 
-func (q *Queries) ListFeedbacksByCanteenID(ctx context.Context, canteenID pgtype.UUID) ([]Feedback, error) {
-	rows, err := q.db.Query(ctx, listFeedbacksByCanteenID, canteenID)
+func (q *Queries) GetMenuRatingsByOrderID(ctx context.Context, orderID pgtype.UUID) ([]MenuRating, error) {
+	rows, err := q.db.Query(ctx, getMenuRatingsByOrderID, orderID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Feedback{}
+	items := []MenuRating{}
 	for rows.Next() {
-		var i Feedback
+		var i MenuRating
 		if err := rows.Scan(
 			&i.ID,
 			&i.OrderID,
+			&i.MenuItemID,
 			&i.UserID,
 			&i.CanteenID,
 			&i.Rating,
-			&i.Comment,
 			&i.IsRemoved,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOrderItemsMenuIDsByOrderID = `-- name: GetOrderItemsMenuIDsByOrderID :many
+SELECT menu_item_id, qty
+FROM order_items
+WHERE order_id = $1
+`
+
+type GetOrderItemsMenuIDsByOrderIDRow struct {
+	MenuItemID pgtype.UUID `json:"menu_item_id"`
+	Qty        int32       `json:"qty"`
+}
+
+func (q *Queries) GetOrderItemsMenuIDsByOrderID(ctx context.Context, orderID pgtype.UUID) ([]GetOrderItemsMenuIDsByOrderIDRow, error) {
+	rows, err := q.db.Query(ctx, getOrderItemsMenuIDsByOrderID, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetOrderItemsMenuIDsByOrderIDRow{}
+	for rows.Next() {
+		var i GetOrderItemsMenuIDsByOrderIDRow
+		if err := rows.Scan(&i.MenuItemID, &i.Qty); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -149,4 +229,16 @@ func (q *Queries) SoftRemoveFeedbackByID(ctx context.Context, arg SoftRemoveFeed
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const softRemoveMenuRatingsByOrderID = `-- name: SoftRemoveMenuRatingsByOrderID :exec
+UPDATE menu_ratings
+SET is_removed = true,
+	updated_at = now()
+WHERE order_id = $1 AND is_removed = false
+`
+
+func (q *Queries) SoftRemoveMenuRatingsByOrderID(ctx context.Context, orderID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, softRemoveMenuRatingsByOrderID, orderID)
+	return err
 }

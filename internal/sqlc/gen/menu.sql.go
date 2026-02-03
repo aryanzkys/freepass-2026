@@ -133,22 +133,65 @@ func (q *Queries) GetMenuItemByID(ctx context.Context, id pgtype.UUID) (MenuItem
 	return i, err
 }
 
-const listMenuItemsByCanteenID = `-- name: ListMenuItemsByCanteenID :many
-SELECT id, canteen_id, name, description, price, stock, is_available, created_at, updated_at
-FROM menu_items
-WHERE canteen_id = $1
-ORDER BY created_at DESC
+const listMenuItemsWithRatingsByCanteenID = `-- name: ListMenuItemsWithRatingsByCanteenID :many
+WITH agg AS (
+	SELECT menu_item_id,
+		AVG(rating)::float8 AS avg_rating,
+		COUNT(*)::int4 AS rating_count
+	FROM menu_ratings
+	WHERE canteen_id = $1 AND is_removed = false
+	GROUP BY menu_item_id
+),
+ranked AS (
+	SELECT menu_item_id,
+		ROW_NUMBER() OVER (ORDER BY avg_rating DESC NULLS LAST, rating_count DESC, menu_item_id ASC)::int4 AS recommended_rank
+	FROM agg
+)
+SELECT mi.id,
+	mi.canteen_id,
+	mi.name,
+	mi.description,
+	mi.price,
+	mi.stock,
+	mi.is_available,
+	mi.created_at,
+	mi.updated_at,
+	agg.avg_rating,
+	COALESCE(agg.rating_count, 0)::int4 AS rating_count,
+	(CASE WHEN ranked.recommended_rank <= 5 THEN true ELSE false END) AS is_recommended,
+	COALESCE(ranked.recommended_rank, 0)::int4 AS recommended_rank
+FROM menu_items mi
+LEFT JOIN agg ON agg.menu_item_id = mi.id
+LEFT JOIN ranked ON ranked.menu_item_id = mi.id
+WHERE mi.canteen_id = $1
+ORDER BY is_recommended DESC, recommended_rank ASC NULLS LAST, mi.created_at DESC
 `
 
-func (q *Queries) ListMenuItemsByCanteenID(ctx context.Context, canteenID pgtype.UUID) ([]MenuItem, error) {
-	rows, err := q.db.Query(ctx, listMenuItemsByCanteenID, canteenID)
+type ListMenuItemsWithRatingsByCanteenIDRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	CanteenID       pgtype.UUID        `json:"canteen_id"`
+	Name            string             `json:"name"`
+	Description     pgtype.Text        `json:"description"`
+	Price           int32              `json:"price"`
+	Stock           int32              `json:"stock"`
+	IsAvailable     bool               `json:"is_available"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	AvgRating       pgtype.Float8      `json:"avg_rating"`
+	RatingCount     int32              `json:"rating_count"`
+	IsRecommended   bool               `json:"is_recommended"`
+	RecommendedRank int32              `json:"recommended_rank"`
+}
+
+func (q *Queries) ListMenuItemsWithRatingsByCanteenID(ctx context.Context, canteenID pgtype.UUID) ([]ListMenuItemsWithRatingsByCanteenIDRow, error) {
+	rows, err := q.db.Query(ctx, listMenuItemsWithRatingsByCanteenID, canteenID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []MenuItem{}
+	items := []ListMenuItemsWithRatingsByCanteenIDRow{}
 	for rows.Next() {
-		var i MenuItem
+		var i ListMenuItemsWithRatingsByCanteenIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CanteenID,
@@ -159,6 +202,10 @@ func (q *Queries) ListMenuItemsByCanteenID(ctx context.Context, canteenID pgtype
 			&i.IsAvailable,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.AvgRating,
+			&i.RatingCount,
+			&i.IsRecommended,
+			&i.RecommendedRank,
 		); err != nil {
 			return nil, err
 		}

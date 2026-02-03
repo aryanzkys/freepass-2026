@@ -1,8 +1,35 @@
--- name: ListMenuItemsByCanteenID :many
-SELECT id, canteen_id, name, description, price, stock, is_available, created_at, updated_at
-FROM menu_items
-WHERE canteen_id = $1
-ORDER BY created_at DESC;
+-- name: ListMenuItemsWithRatingsByCanteenID :many
+WITH agg AS (
+	SELECT menu_item_id,
+		AVG(rating)::float8 AS avg_rating,
+		COUNT(*)::int4 AS rating_count
+	FROM menu_ratings
+	WHERE canteen_id = $1 AND is_removed = false
+	GROUP BY menu_item_id
+),
+ranked AS (
+	SELECT menu_item_id,
+		ROW_NUMBER() OVER (ORDER BY avg_rating DESC NULLS LAST, rating_count DESC, menu_item_id ASC)::int4 AS recommended_rank
+	FROM agg
+)
+SELECT mi.id,
+	mi.canteen_id,
+	mi.name,
+	mi.description,
+	mi.price,
+	mi.stock,
+	mi.is_available,
+	mi.created_at,
+	mi.updated_at,
+	agg.avg_rating,
+	COALESCE(agg.rating_count, 0)::int4 AS rating_count,
+	(CASE WHEN ranked.recommended_rank <= 5 THEN true ELSE false END) AS is_recommended,
+	COALESCE(ranked.recommended_rank, 0)::int4 AS recommended_rank
+FROM menu_items mi
+LEFT JOIN agg ON agg.menu_item_id = mi.id
+LEFT JOIN ranked ON ranked.menu_item_id = mi.id
+WHERE mi.canteen_id = $1
+ORDER BY is_recommended DESC, recommended_rank ASC NULLS LAST, mi.created_at DESC;
 
 -- name: GetMenuItemByID :one
 SELECT id, canteen_id, name, description, price, stock, is_available, created_at, updated_at

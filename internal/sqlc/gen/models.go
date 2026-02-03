@@ -154,7 +154,7 @@ type Feedback struct {
 	OrderID   pgtype.UUID        `json:"order_id"`
 	UserID    pgtype.UUID        `json:"user_id"`
 	CanteenID pgtype.UUID        `json:"canteen_id"`
-	Rating    int32              `json:"rating"`
+	Rating    pgtype.Int4        `json:"rating"`
 	Comment   pgtype.Text        `json:"comment"`
 	IsRemoved bool               `json:"is_removed"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
@@ -171,6 +171,18 @@ type MenuItem struct {
 	IsAvailable bool               `json:"is_available"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MenuRating struct {
+	ID         pgtype.UUID        `json:"id"`
+	OrderID    pgtype.UUID        `json:"order_id"`
+	MenuItemID pgtype.UUID        `json:"menu_item_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	CanteenID  pgtype.UUID        `json:"canteen_id"`
+	Rating     int32              `json:"rating"`
+	IsRemoved  bool               `json:"is_removed"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Order struct {

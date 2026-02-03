@@ -17,6 +17,7 @@ type Dependencies struct {
 	Canteen    *handlers.CanteenHandler
 	Order      *handlers.OrderHandler
 	Payment    *handlers.PaymentHandler
+	Feedback   *handlers.FeedbackHandler
 	OwnerMenu  *handlers.OwnerMenuHandler
 	OwnerOrder *handlers.OwnerOrderHandler
 }
@@ -38,6 +39,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	orders.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("USER", "ADMIN"))
 	orders.POST("", deps.Order.CreateOrder)
 	orders.POST("/:orderId/payments", deps.Payment.CreatePayment)
+	orders.POST("/:orderId/feedback", deps.Feedback.CreateFeedbackForOrder)
 	owner := engine.Group("/owner/canteens/:canteenId")
 	owner.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("OWNER", "ADMIN"), middleware.RequireCanteenOwner(deps.Queries))
 	owner.POST("/menus", deps.OwnerMenu.CreateMenuItem)
@@ -45,5 +47,6 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	owner.DELETE("/menus/:menuId", deps.OwnerMenu.DeleteMenuItem)
 	owner.GET("/orders", deps.OwnerOrder.ListIncomingOrders)
 	owner.PATCH("/orders/:orderId/status", deps.OwnerOrder.UpdateOrderStatus)
+	owner.DELETE("/feedbacks/:feedbackId", deps.Feedback.RemoveFeedbackAsOwner)
 	return engine
 }
