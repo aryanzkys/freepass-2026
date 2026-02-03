@@ -7,6 +7,7 @@ import (
 	"freepass-2026/internal/config"
 	db "freepass-2026/internal/db"
 	"freepass-2026/internal/http"
+	"freepass-2026/internal/http/handlers"
 	sqlc "freepass-2026/internal/sqlc/gen"
 
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,7 @@ func Build(ctx context.Context) (*App, error) {
 	}
 	queries := sqlc.New(pool)
 	authService := auth.New(cfg.JWTSecret)
-	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool, Auth: authService})
+	canteenHandler := handlers.NewCanteenHandler(queries)
+	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool, Auth: authService, Canteen: canteenHandler})
 	return &App{Cfg: cfg, Pool: pool, Queries: queries, Engine: engine}, nil
 }

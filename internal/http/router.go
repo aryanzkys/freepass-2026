@@ -2,6 +2,7 @@ package http
 
 import (
 	"freepass-2026/internal/auth"
+	"freepass-2026/internal/http/handlers"
 	"freepass-2026/internal/http/middleware"
 	db "freepass-2026/internal/sqlc/gen"
 
@@ -13,6 +14,7 @@ type Dependencies struct {
 	Queries *db.Queries
 	Pool    *pgxpool.Pool
 	Auth    *auth.Service
+	Canteen *handlers.CanteenHandler
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -26,6 +28,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	engine.GET("/health", h.Health)
 	engine.POST("/auth/register", authHandler.Register)
 	engine.POST("/auth/login", authHandler.Login)
+	engine.GET("/canteens", deps.Canteen.ListCanteens)
+	engine.GET("/canteens/:canteenId/menus", deps.Canteen.ListMenusByCanteen)
 	engine.Group("/").Use(middleware.RequireAuth(deps.Auth))
 	engine.Group("/").Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("ADMIN"))
 	engine.Group("/").Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("OWNER", "ADMIN"), middleware.RequireCanteenOwner(deps.Queries))
