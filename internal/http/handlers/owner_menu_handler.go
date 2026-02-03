@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type OwnerMenuHandler struct {
@@ -198,6 +199,11 @@ func (h *OwnerMenuHandler) DeleteMenuItem(c *gin.Context) {
 	}
 
 	if err := h.Queries.DeleteMenuItem(c.Request.Context(), db.DeleteMenuItemParams{ID: menuUUID, CanteenID: canteenUUID}); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			response.Error(c, http.StatusConflict, "menu_has_dependencies", nil)
+			return
+		}
 		response.Error(c, http.StatusInternalServerError, "internal_error", nil)
 		return
 	}
