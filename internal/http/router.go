@@ -11,12 +11,14 @@ import (
 )
 
 type Dependencies struct {
-	Queries *db.Queries
-	Pool    *pgxpool.Pool
-	Auth    *auth.Service
-	Canteen *handlers.CanteenHandler
-	Order   *handlers.OrderHandler
-	Payment *handlers.PaymentHandler
+	Queries    *db.Queries
+	Pool       *pgxpool.Pool
+	Auth       *auth.Service
+	Canteen    *handlers.CanteenHandler
+	Order      *handlers.OrderHandler
+	Payment    *handlers.PaymentHandler
+	OwnerMenu  *handlers.OwnerMenuHandler
+	OwnerOrder *handlers.OwnerOrderHandler
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -32,12 +34,16 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	engine.POST("/auth/login", authHandler.Login)
 	engine.GET("/canteens", deps.Canteen.ListCanteens)
 	engine.GET("/canteens/:canteenId/menus", deps.Canteen.ListMenusByCanteen)
-	engine.Group("/").Use(middleware.RequireAuth(deps.Auth))
-	engine.Group("/").Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("ADMIN"))
-	engine.Group("/").Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("OWNER", "ADMIN"), middleware.RequireCanteenOwner(deps.Queries))
 	orders := engine.Group("/orders")
 	orders.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("USER", "ADMIN"))
 	orders.POST("", deps.Order.CreateOrder)
 	orders.POST("/:orderId/payments", deps.Payment.CreatePayment)
+	owner := engine.Group("/owner/canteens/:canteenId")
+	owner.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("OWNER", "ADMIN"), middleware.RequireCanteenOwner(deps.Queries))
+	owner.POST("/menus", deps.OwnerMenu.CreateMenuItem)
+	owner.PUT("/menus/:menuId", deps.OwnerMenu.UpdateMenuItem)
+	owner.DELETE("/menus/:menuId", deps.OwnerMenu.DeleteMenuItem)
+	owner.GET("/orders", deps.OwnerOrder.ListIncomingOrders)
+	owner.PATCH("/orders/:orderId/status", deps.OwnerOrder.UpdateOrderStatus)
 	return engine
 }
