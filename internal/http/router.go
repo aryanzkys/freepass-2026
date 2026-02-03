@@ -43,6 +43,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	engine.GET("/canteens/:canteenId/menus", deps.Canteen.ListMenusByCanteen)
 	orders := engine.Group("/orders")
 	orders.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("USER", "ADMIN"))
+	orders.GET("", deps.Order.ListMyOrders)
 	orders.POST("", deps.Order.CreateOrder)
 	orders.POST("/:orderId/payments", deps.Payment.CreatePayment)
 	orders.POST("/:orderId/feedback", deps.Feedback.CreateFeedbackForOrder)

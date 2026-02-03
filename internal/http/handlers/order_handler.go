@@ -242,3 +242,45 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, resp)
 }
+
+func (h *OrderHandler) ListMyOrders(c *gin.Context) {
+	role, ok := httpcontext.UserRole(c)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+	if role != "USER" && role != "ADMIN" {
+		response.Error(c, http.StatusForbidden, "forbidden", nil)
+		return
+	}
+	userID, ok := httpcontext.UserID(c)
+	if !ok {
+		response.Error(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+	var userUUID pgtype.UUID
+	if err := userUUID.Scan(userID); err != nil || !userUUID.Valid {
+		response.Error(c, http.StatusUnauthorized, "unauthorized", nil)
+		return
+	}
+
+	items, err := h.Queries.ListOrdersByUserID(c.Request.Context(), userUUID)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "internal_error", nil)
+		return
+	}
+	resp := make([]orderResponse, 0, len(items))
+	for _, item := range items {
+		resp = append(resp, orderResponse{
+			ID:            item.ID.String(),
+			UserID:        item.UserID.String(),
+			CanteenID:     item.CanteenID.String(),
+			PaymentStatus: string(item.PaymentStatus),
+			OrderStatus:   string(item.OrderStatus),
+			TotalAmount:   item.TotalAmount,
+			CreatedAt:     timeToString(item.CreatedAt),
+			UpdatedAt:     timeToString(item.UpdatedAt),
+		})
+	}
+	c.JSON(http.StatusOK, listResponse[orderResponse]{Data: resp})
+}
