@@ -26,5 +26,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	engine.GET("/health", h.Health)
 	engine.POST("/auth/register", authHandler.Register)
 	engine.POST("/auth/login", authHandler.Login)
+	engine.Group("/").Use(middleware.RequireAuth(deps.Auth))
+	engine.Group("/").Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("ADMIN"))
+	engine.Group("/").Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("OWNER", "ADMIN"), middleware.RequireCanteenOwner(deps.Queries))
 	return engine
 }
