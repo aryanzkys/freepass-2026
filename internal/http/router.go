@@ -15,6 +15,7 @@ type Dependencies struct {
 	Pool    *pgxpool.Pool
 	Auth    *auth.Service
 	Canteen *handlers.CanteenHandler
+	Order   *handlers.OrderHandler
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -33,5 +34,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	engine.Group("/").Use(middleware.RequireAuth(deps.Auth))
 	engine.Group("/").Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("ADMIN"))
 	engine.Group("/").Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("OWNER", "ADMIN"), middleware.RequireCanteenOwner(deps.Queries))
+	orders := engine.Group("/orders")
+	orders.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("USER", "ADMIN"))
+	orders.POST("", deps.Order.CreateOrder)
 	return engine
 }

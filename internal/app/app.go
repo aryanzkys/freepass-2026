@@ -33,6 +33,7 @@ func Build(ctx context.Context) (*App, error) {
 	queries := sqlc.New(pool)
 	authService := auth.New(cfg.JWTSecret)
 	canteenHandler := handlers.NewCanteenHandler(queries)
-	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool, Auth: authService, Canteen: canteenHandler})
+	orderHandler := handlers.NewOrderHandler(pool, queries)
+	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool, Auth: authService, Canteen: canteenHandler, Order: orderHandler})
 	return &App{Cfg: cfg, Pool: pool, Queries: queries, Engine: engine}, nil
 }
