@@ -8,14 +8,23 @@ CREATE TYPE user_role AS ENUM (
 
 CREATE TYPE payment_status AS ENUM (
 	'UNPAID',
-	'PAID'
+	'AWAITING_VERIFICATION',
+	'PAID',
+	'REJECTED',
+	'REFUNDED'
 );
 
 CREATE TYPE order_status AS ENUM (
+	'PAYMENT',
 	'WAITING',
 	'COOKING',
 	'READY',
 	'COMPLETED'
+);
+
+CREATE TYPE payment_method AS ENUM (
+	'CASH',
+	'CASHLESS_QRIS'
 );
 
 CREATE TABLE users (
@@ -34,6 +43,8 @@ CREATE TABLE canteens (
 	name text NOT NULL,
 	location text,
 	owner_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+	qris_static_url text,
+	qris_static_updated_at timestamptz,
 	created_at timestamptz NOT NULL DEFAULT now(),
 	updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -54,6 +65,7 @@ CREATE TABLE orders (
 	id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 	canteen_id uuid NOT NULL REFERENCES canteens(id) ON DELETE RESTRICT,
+	payment_method payment_method NOT NULL DEFAULT 'CASH',
 	payment_status payment_status NOT NULL DEFAULT 'UNPAID',
 	order_status order_status NOT NULL DEFAULT 'WAITING',
 	total_amount integer NOT NULL CHECK (total_amount >= 0),
@@ -109,6 +121,29 @@ CREATE TABLE menu_ratings (
 
 ALTER TABLE menu_ratings ADD CONSTRAINT menu_ratings_order_menu_unique UNIQUE (order_id, menu_item_id);
 
+CREATE TABLE payment_verifications (
+	id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE UNIQUE,
+	canteen_id uuid NOT NULL REFERENCES canteens(id) ON DELETE CASCADE,
+	user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+	status text NOT NULL,
+	rejection_reason text,
+	created_at timestamptz NOT NULL DEFAULT now(),
+	updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE refunds (
+	id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	order_id uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+	canteen_id uuid NOT NULL REFERENCES canteens(id) ON DELETE CASCADE,
+	user_id uuid NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+	amount bigint NOT NULL,
+	reason text NOT NULL,
+	status text NOT NULL,
+	created_at timestamptz NOT NULL DEFAULT now(),
+	updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE INDEX idx_canteens_owner_id ON canteens(owner_id);
 CREATE INDEX idx_menu_items_canteen_id ON menu_items(canteen_id);
 CREATE INDEX idx_orders_user_id ON orders(user_id);
@@ -126,3 +161,10 @@ CREATE INDEX idx_menu_ratings_menu_item_id ON menu_ratings(menu_item_id);
 CREATE INDEX idx_menu_ratings_order_id ON menu_ratings(order_id);
 CREATE INDEX idx_menu_ratings_user_id ON menu_ratings(user_id);
 CREATE INDEX idx_menu_ratings_canteen_removed ON menu_ratings(canteen_id, is_removed);
+CREATE INDEX idx_payment_verifications_canteen_id ON payment_verifications(canteen_id);
+CREATE INDEX idx_payment_verifications_user_id ON payment_verifications(user_id);
+CREATE INDEX idx_payment_verifications_status ON payment_verifications(status);
+CREATE INDEX idx_refunds_order_id ON refunds(order_id);
+CREATE INDEX idx_refunds_canteen_id ON refunds(canteen_id);
+CREATE INDEX idx_refunds_user_id ON refunds(user_id);
+CREATE INDEX idx_refunds_status ON refunds(status);

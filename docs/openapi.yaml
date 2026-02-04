@@ -156,6 +156,8 @@ components:
           type: string
         canteen_id:
           type: string
+        payment_method:
+          type: string
         payment_status:
           type: string
         order_status:
@@ -170,6 +172,7 @@ components:
         - id
         - user_id
         - canteen_id
+        - payment_method
         - payment_status
         - order_status
         - total_amount
@@ -324,6 +327,155 @@ components:
           $ref: "#/components/schemas/Feedback"
       required:
         - feedback
+    QRISInfo:
+      type: object
+      properties:
+        order_id:
+          type: string
+        canteen_id:
+          type: string
+        qris_static_url:
+          type: string
+        order_status:
+          type: string
+        payment_status:
+          type: string
+        total_amount:
+          type: integer
+      required:
+        - order_id
+        - canteen_id
+        - qris_static_url
+        - order_status
+        - payment_status
+        - total_amount
+    PaymentVerification:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        canteen_id:
+          type: string
+        user_id:
+          type: string
+        status:
+          type: string
+        rejection_reason:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - order_id
+        - canteen_id
+        - user_id
+        - status
+        - created_at
+        - updated_at
+    Refund:
+      type: object
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        canteen_id:
+          type: string
+        user_id:
+          type: string
+        amount:
+          type: integer
+        reason:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - order_id
+        - canteen_id
+        - user_id
+        - amount
+        - reason
+        - status
+        - created_at
+        - updated_at
+    QRISConfirmResponse:
+      type: object
+      properties:
+        order:
+          $ref: "#/components/schemas/Order"
+        verification:
+          $ref: "#/components/schemas/PaymentVerification"
+      required:
+        - order
+        - verification
+    OwnerVerifyPaymentResponse:
+      type: object
+      properties:
+        order:
+          $ref: "#/components/schemas/Order"
+        verification:
+          $ref: "#/components/schemas/PaymentVerification"
+        refund:
+          nullable: true
+          oneOf:
+            - $ref: "#/components/schemas/Refund"
+            - type: "null"
+      required:
+        - order
+        - verification
+    CanteenWithQRIS:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        location:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+        owner_id:
+          type: string
+        qris_static_url:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+        qris_static_updated_at:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+        created_at:
+          type: string
+        updated_at:
+          type: string
+      required:
+        - id
+        - name
+        - owner_id
+        - created_at
+        - updated_at
+    AdminCanteenResponse:
+      type: object
+      properties:
+        canteen:
+          $ref: "#/components/schemas/CanteenWithQRIS"
+      required:
+        - canteen
     AdminUserResponse:
       type: object
       properties:
@@ -477,6 +629,8 @@ paths:
               properties:
                 canteen_id:
                   type: string
+                payment_method:
+                  type: string
                 items:
                   type: array
                   items:
@@ -625,6 +779,102 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/payment/qris:
+    get:
+      summary: Get QRIS payment info
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QRISInfo"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orders/{orderId}/payment/qris/confirm:
+    post:
+      summary: Confirm QRIS payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QRISConfirmResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
           content:
             application/json:
               schema:
@@ -894,6 +1144,75 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /owner/canteens/{canteenId}/orders/{orderId}/payment/verify:
+    patch:
+      summary: Verify QRIS payment
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                reason:
+                  nullable: true
+                  oneOf:
+                    - type: string
+                    - type: "null"
+              required:
+                - action
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnerVerifyPaymentResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /owner/canteens/{canteenId}/feedbacks/{feedbackId}:
     delete:
       summary: Remove feedback
@@ -1112,6 +1431,59 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/canteens/{canteenId}/qris:
+    put:
+      summary: Update canteen QRIS static URL
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                qris_static_url:
+                  type: string
+              required:
+                - qris_static_url
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCanteenResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
           content:
             application/json:
               schema:

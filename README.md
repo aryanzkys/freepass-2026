@@ -72,6 +72,54 @@ go test ./...
 
 Open docs/openapi.yaml in your preferred OpenAPI viewer.
 
+## Payment methods
+
+The API supports CASH and CASHLESS_QRIS.
+
+CASH flow:
+
+- order_status starts WAITING
+- payment_status starts UNPAID
+
+CASHLESS_QRIS flow:
+
+- order_status starts PAYMENT
+- payment_status starts UNPAID
+- user confirms payment, order_status becomes WAITING and payment_status becomes AWAITING_VERIFICATION
+- owner approves to set payment_status PAID or rejects to set payment_status REJECTED and order_status PAYMENT with a refund record
+
+## QRIS setup
+
+Admin uploads a static QRIS URL per canteen using:
+
+PUT /admin/canteens/:canteenId/qris
+
+## Payment examples (PowerShell)
+
+Create CASH order
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/orders" -Headers @{Authorization="Bearer $env:TOKEN"} -ContentType "application/json" -Body '{"canteen_id":"'$env:CANTEEN_ID'","payment_method":"CASH","items":[{"menu_item_id":"'$env:MENU_ID'","qty":1}]}'
+
+Create CASHLESS_QRIS order
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/orders" -Headers @{Authorization="Bearer $env:TOKEN"} -ContentType "application/json" -Body '{"canteen_id":"'$env:CANTEEN_ID'","payment_method":"CASHLESS_QRIS","items":[{"menu_item_id":"'$env:MENU_ID'","qty":1}]}'
+
+Get QRIS info
+
+Invoke-RestMethod -Method Get -Uri "http://localhost:8080/orders/$env:ORDER_ID/payment/qris" -Headers @{Authorization="Bearer $env:TOKEN"}
+
+Confirm QRIS paid
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/orders/$env:ORDER_ID/payment/qris/confirm" -Headers @{Authorization="Bearer $env:TOKEN"}
+
+Owner approve QRIS
+
+Invoke-RestMethod -Method Patch -Uri "http://localhost:8080/owner/canteens/$env:CANTEEN_ID/orders/$env:ORDER_ID/payment/verify" -Headers @{Authorization="Bearer $env:OWNER_TOKEN"} -ContentType "application/json" -Body '{"action":"APPROVE"}'
+
+Owner reject QRIS
+
+Invoke-RestMethod -Method Patch -Uri "http://localhost:8080/owner/canteens/$env:CANTEEN_ID/orders/$env:ORDER_ID/payment/verify" -Headers @{Authorization="Bearer $env:OWNER_TOKEN"} -ContentType "application/json" -Body '{"action":"REJECT","reason":"Amount mismatch"}'
+
 ## Admin testing
 
 Register a normal user, then promote it to ADMIN using SQL:

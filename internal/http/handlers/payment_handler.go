@@ -121,6 +121,10 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 		response.Error(c, http.StatusForbidden, "forbidden", nil)
 		return
 	}
+	if order.PaymentMethod != db.PaymentMethodCASH {
+		response.Error(c, http.StatusConflict, "invalid_payment_method", nil)
+		return
+	}
 
 	if order.PaymentStatus == "PAID" {
 		response.Error(c, http.StatusConflict, "payment_already_processed", nil)
@@ -193,6 +197,7 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 			ID:            paidOrder.ID.String(),
 			UserID:        paidOrder.UserID.String(),
 			CanteenID:     paidOrder.CanteenID.String(),
+			PaymentMethod: string(paidOrder.PaymentMethod),
 			PaymentStatus: string(paidOrder.PaymentStatus),
 			OrderStatus:   string(paidOrder.OrderStatus),
 			TotalAmount:   paidOrder.TotalAmount,

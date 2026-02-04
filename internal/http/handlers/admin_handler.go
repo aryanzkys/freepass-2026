@@ -53,6 +53,25 @@ type adminDeleteResponse struct {
 	Deleted bool `json:"deleted"`
 }
 
+type adminUpdateQrisRequest struct {
+	QRISStaticURL string `json:"qris_static_url"`
+}
+
+type adminCanteenResponse struct {
+	ID                  string  `json:"id"`
+	Name                string  `json:"name"`
+	Location            *string `json:"location"`
+	OwnerID             string  `json:"owner_id"`
+	QRISStaticURL       *string `json:"qris_static_url"`
+	QRISStaticUpdatedAt *string `json:"qris_static_updated_at"`
+	CreatedAt           string  `json:"created_at"`
+	UpdatedAt           string  `json:"updated_at"`
+}
+
+type adminCanteenWrapperResponse struct {
+	Canteen adminCanteenResponse `json:"canteen"`
+}
+
 func NewAdminHandler(queries *db.Queries, cfg config.Config) *AdminHandler {
 	return &AdminHandler{Queries: queries, Cfg: cfg}
 }
@@ -291,4 +310,53 @@ func (h *AdminHandler) DeleteAccount(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, adminDeleteResponse{Deleted: true})
+}
+
+func (h *AdminHandler) UpdateCanteenQRIS(c *gin.Context) {
+	canteenUUID, ok := parseUUIDParam(c, "canteenId", "canteen_id")
+	if !ok {
+		return
+	}
+
+	var req adminUpdateQrisRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		details := map[string]string{"body": "invalid"}
+		response.Error(c, http.StatusBadRequest, "validation_error", details)
+		return
+	}
+	qrisURL := strings.TrimSpace(req.QRISStaticURL)
+	if qrisURL == "" || (!strings.HasPrefix(qrisURL, "http://") && !strings.HasPrefix(qrisURL, "https://")) {
+		details := map[string]string{"qris_static_url": "invalid"}
+		response.Error(c, http.StatusBadRequest, "validation_error", details)
+		return
+	}
+
+	updated, err := h.Queries.UpdateCanteenQRISStatic(c.Request.Context(), db.UpdateCanteenQRISStaticParams{ID: canteenUUID, QrisStaticUrl: pgtype.Text{String: qrisURL, Valid: true}})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			response.Error(c, http.StatusNotFound, "not_found", nil)
+			return
+		}
+		response.Error(c, http.StatusInternalServerError, "internal_error", nil)
+		return
+	}
+
+	resp := adminCanteenWrapperResponse{Canteen: adminCanteenResponse{
+		ID:        updated.ID.String(),
+		Name:      updated.Name,
+		OwnerID:   updated.OwnerID.String(),
+		CreatedAt: timeToString(updated.CreatedAt),
+		UpdatedAt: timeToString(updated.UpdatedAt),
+	}}
+	if updated.Location.Valid {
+		resp.Canteen.Location = &updated.Location.String
+	}
+	if updated.QrisStaticUrl.Valid {
+		resp.Canteen.QRISStaticURL = &updated.QrisStaticUrl.String
+	}
+	if updated.QrisStaticUpdatedAt.Valid {
+		value := timeToString(updated.QrisStaticUpdatedAt)
+		resp.Canteen.QRISStaticUpdatedAt = &value
+	}
+	c.JSON(http.StatusOK, resp)
 }

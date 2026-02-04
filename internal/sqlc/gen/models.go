@@ -14,6 +14,7 @@ import (
 type OrderStatus string
 
 const (
+	OrderStatusPAYMENT   OrderStatus = "PAYMENT"
 	OrderStatusWAITING   OrderStatus = "WAITING"
 	OrderStatusCOOKING   OrderStatus = "COOKING"
 	OrderStatusREADY     OrderStatus = "READY"
@@ -55,11 +56,56 @@ func (ns NullOrderStatus) Value() (driver.Value, error) {
 	return string(ns.OrderStatus), nil
 }
 
+type PaymentMethod string
+
+const (
+	PaymentMethodCASH         PaymentMethod = "CASH"
+	PaymentMethodCASHLESSQRIS PaymentMethod = "CASHLESS_QRIS"
+)
+
+func (e *PaymentMethod) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = PaymentMethod(s)
+	case string:
+		*e = PaymentMethod(s)
+	default:
+		return fmt.Errorf("unsupported scan type for PaymentMethod: %T", src)
+	}
+	return nil
+}
+
+type NullPaymentMethod struct {
+	PaymentMethod PaymentMethod `json:"payment_method"`
+	Valid         bool          `json:"valid"` // Valid is true if PaymentMethod is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullPaymentMethod) Scan(value interface{}) error {
+	if value == nil {
+		ns.PaymentMethod, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.PaymentMethod.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullPaymentMethod) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.PaymentMethod), nil
+}
+
 type PaymentStatus string
 
 const (
-	PaymentStatusUNPAID PaymentStatus = "UNPAID"
-	PaymentStatusPAID   PaymentStatus = "PAID"
+	PaymentStatusUNPAID               PaymentStatus = "UNPAID"
+	PaymentStatusAWAITINGVERIFICATION PaymentStatus = "AWAITING_VERIFICATION"
+	PaymentStatusPAID                 PaymentStatus = "PAID"
+	PaymentStatusREJECTED             PaymentStatus = "REJECTED"
+	PaymentStatusREFUNDED             PaymentStatus = "REFUNDED"
 )
 
 func (e *PaymentStatus) Scan(src interface{}) error {
@@ -141,12 +187,14 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 }
 
 type Canteen struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	Location  pgtype.Text        `json:"location"`
-	OwnerID   pgtype.UUID        `json:"owner_id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID                  pgtype.UUID        `json:"id"`
+	Name                string             `json:"name"`
+	Location            pgtype.Text        `json:"location"`
+	OwnerID             pgtype.UUID        `json:"owner_id"`
+	QrisStaticUrl       pgtype.Text        `json:"qris_static_url"`
+	QrisStaticUpdatedAt pgtype.Timestamptz `json:"qris_static_updated_at"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Feedback struct {
@@ -189,6 +237,7 @@ type Order struct {
 	ID            pgtype.UUID        `json:"id"`
 	UserID        pgtype.UUID        `json:"user_id"`
 	CanteenID     pgtype.UUID        `json:"canteen_id"`
+	PaymentMethod PaymentMethod      `json:"payment_method"`
 	PaymentStatus PaymentStatus      `json:"payment_status"`
 	OrderStatus   OrderStatus        `json:"order_status"`
 	TotalAmount   int32              `json:"total_amount"`
@@ -214,6 +263,29 @@ type Payment struct {
 	Amount    int32              `json:"amount"`
 	Status    string             `json:"status"`
 	PaidAt    pgtype.Timestamptz `json:"paid_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PaymentVerification struct {
+	ID              pgtype.UUID        `json:"id"`
+	OrderID         pgtype.UUID        `json:"order_id"`
+	CanteenID       pgtype.UUID        `json:"canteen_id"`
+	UserID          pgtype.UUID        `json:"user_id"`
+	Status          string             `json:"status"`
+	RejectionReason pgtype.Text        `json:"rejection_reason"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Refund struct {
+	ID        pgtype.UUID        `json:"id"`
+	OrderID   pgtype.UUID        `json:"order_id"`
+	CanteenID pgtype.UUID        `json:"canteen_id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Amount    int64              `json:"amount"`
+	Reason    string             `json:"reason"`
+	Status    string             `json:"status"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }

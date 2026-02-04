@@ -37,7 +37,7 @@ func Build(ctx context.Context) (*App, error) {
 	paymentHandler := handlers.NewPaymentHandler(pool, queries)
 	feedbackHandler := handlers.NewFeedbackHandler(pool, queries)
 	ownerMenuHandler := handlers.NewOwnerMenuHandler(queries)
-	ownerOrderHandler := handlers.NewOwnerOrderHandler(queries)
+	ownerOrderHandler := handlers.NewOwnerOrderHandler(pool, queries)
 	adminHandler := handlers.NewAdminHandler(queries, cfg)
 	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool, Auth: authService, Canteen: canteenHandler, Order: orderHandler, Payment: paymentHandler, Feedback: feedbackHandler, OwnerMenu: ownerMenuHandler, OwnerOrder: ownerOrderHandler, Admin: adminHandler})
 	return &App{Cfg: cfg, Pool: pool, Queries: queries, Engine: engine}, nil

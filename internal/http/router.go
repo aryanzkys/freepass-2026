@@ -47,6 +47,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	orders.POST("", deps.Order.CreateOrder)
 	orders.POST("/:orderId/payments", deps.Payment.CreatePayment)
 	orders.POST("/:orderId/feedback", deps.Feedback.CreateFeedbackForOrder)
+	orders.GET("/:orderId/payment/qris", deps.Order.GetOrderQRIS)
+	orders.POST("/:orderId/payment/qris/confirm", deps.Order.ConfirmOrderQRIS)
 	owner := engine.Group("/owner/canteens/:canteenId")
 	owner.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("OWNER", "ADMIN"), middleware.RequireCanteenOwner(deps.Queries))
 	owner.POST("/menus", deps.OwnerMenu.CreateMenuItem)
@@ -54,11 +56,13 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	owner.DELETE("/menus/:menuId", deps.OwnerMenu.DeleteMenuItem)
 	owner.GET("/orders", deps.OwnerOrder.ListIncomingOrders)
 	owner.PATCH("/orders/:orderId/status", deps.OwnerOrder.UpdateOrderStatus)
+	owner.PATCH("/orders/:orderId/payment/verify", deps.OwnerOrder.VerifyOrderPayment)
 	owner.DELETE("/feedbacks/:feedbackId", deps.Feedback.RemoveFeedbackAsOwner)
 	admin := engine.Group("/admin")
 	admin.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("ADMIN"))
 	admin.POST("/owners", deps.Admin.CreateOwner)
 	admin.PUT("/owners/:ownerId", deps.Admin.UpdateOwner)
 	admin.DELETE("/accounts/:userId", deps.Admin.DeleteAccount)
+	admin.PUT("/canteens/:canteenId/qris", deps.Admin.UpdateCanteenQRIS)
 	return engine
 }

@@ -4,7 +4,7 @@ FROM canteens
 ORDER BY created_at DESC;
 
 -- name: GetCanteenByID :one
-SELECT id, name, location, owner_id, created_at, updated_at
+SELECT id, name, location, owner_id, qris_static_url, qris_static_updated_at, created_at, updated_at
 FROM canteens
 WHERE id = $1;
 
@@ -20,10 +20,23 @@ INSERT INTO canteens (
 	$2,
 	$3
 )
-RETURNING id, name, location, owner_id, created_at, updated_at;
+RETURNING id, name, location, owner_id, qris_static_url, qris_static_updated_at, created_at, updated_at;
 
 -- name: ListCanteensByOwnerID :many
-SELECT id, name, location, owner_id, created_at, updated_at
+SELECT id, name, location, owner_id, qris_static_url, qris_static_updated_at, created_at, updated_at
 FROM canteens
 WHERE owner_id = $1
 ORDER BY created_at DESC;
+
+-- name: UpdateCanteenQRISStatic :one
+UPDATE canteens
+SET qris_static_url = $2,
+	qris_static_updated_at = now(),
+	updated_at = now()
+WHERE id = $1
+RETURNING id, name, location, owner_id, qris_static_url, qris_static_updated_at, created_at, updated_at;
+
+-- name: GetCanteenQRISStaticByID :one
+SELECT id, qris_static_url, qris_static_updated_at
+FROM canteens
+WHERE id = $1;

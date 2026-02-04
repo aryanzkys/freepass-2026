@@ -3,14 +3,20 @@ INSERT INTO orders (
 	id,
 	user_id,
 	canteen_id,
+	payment_method,
+	payment_status,
+	order_status,
 	total_amount
 ) VALUES (
 	gen_random_uuid(),
 	$1,
 	$2,
-	$3
+	$3,
+	$4,
+	$5,
+	$6
 )
-RETURNING id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at;
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at;
 
 -- name: CreateOrderItem :one
 INSERT INTO order_items (
@@ -31,13 +37,13 @@ INSERT INTO order_items (
 RETURNING id, order_id, menu_item_id, qty, price_snapshot, subtotal, created_at, updated_at;
 
 -- name: ListOrdersByUserID :many
-SELECT id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at
+SELECT id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
 FROM orders
 WHERE user_id = $1
 ORDER BY created_at DESC;
 
 -- name: GetOrderByID :one
-SELECT id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at
+SELECT id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
 FROM orders
 WHERE id = $1;
 
@@ -46,6 +52,7 @@ SELECT
 	o.id AS order_id,
 	o.user_id AS order_user_id,
 	o.canteen_id AS order_canteen_id,
+	o.payment_method AS order_payment_method,
 	o.payment_status AS order_payment_status,
 	o.order_status AS order_status,
 	o.total_amount AS order_total_amount,
@@ -67,7 +74,7 @@ WHERE o.id = $1
 ORDER BY oi.created_at ASC;
 
 -- name: ListOrdersByCanteenID :many
-SELECT id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at
+SELECT id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
 FROM orders
 WHERE canteen_id = $1
 ORDER BY created_at DESC;
@@ -77,11 +84,41 @@ UPDATE orders
 SET order_status = $2,
 	updated_at = now()
 WHERE id = $1 AND payment_status = 'PAID'
-RETURNING id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at;
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at;
+
+-- name: UpdateOrderStatus :one
+UPDATE orders
+SET order_status = $2,
+	updated_at = now()
+WHERE id = $1
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at;
 
 -- name: MarkOrderPaid :one
 UPDATE orders
 SET payment_status = 'PAID',
 	updated_at = now()
 WHERE id = $1 AND payment_status = 'UNPAID'
-RETURNING id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at;
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at;
+
+-- name: SetOrderCashlessConfirmed :one
+UPDATE orders
+SET order_status = 'WAITING',
+	payment_status = 'AWAITING_VERIFICATION',
+	updated_at = now()
+WHERE id = $1 AND order_status = 'PAYMENT' AND payment_status = 'UNPAID'
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at;
+
+-- name: SetOrderPaymentStatus :one
+UPDATE orders
+SET payment_status = $2,
+	updated_at = now()
+WHERE id = $1
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at;
+
+-- name: SetOrderPaymentStatusAndOrderStatus :one
+UPDATE orders
+SET payment_status = $2,
+	order_status = $3,
+	updated_at = now()
+WHERE id = $1
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at;

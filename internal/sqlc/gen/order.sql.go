@@ -16,29 +16,46 @@ INSERT INTO orders (
 	id,
 	user_id,
 	canteen_id,
+	payment_method,
+	payment_status,
+	order_status,
 	total_amount
 ) VALUES (
 	gen_random_uuid(),
 	$1,
 	$2,
-	$3
+	$3,
+	$4,
+	$5,
+	$6
 )
-RETURNING id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
 `
 
 type CreateOrderParams struct {
-	UserID      pgtype.UUID `json:"user_id"`
-	CanteenID   pgtype.UUID `json:"canteen_id"`
-	TotalAmount int32       `json:"total_amount"`
+	UserID        pgtype.UUID   `json:"user_id"`
+	CanteenID     pgtype.UUID   `json:"canteen_id"`
+	PaymentMethod PaymentMethod `json:"payment_method"`
+	PaymentStatus PaymentStatus `json:"payment_status"`
+	OrderStatus   OrderStatus   `json:"order_status"`
+	TotalAmount   int32         `json:"total_amount"`
 }
 
 func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error) {
-	row := q.db.QueryRow(ctx, createOrder, arg.UserID, arg.CanteenID, arg.TotalAmount)
+	row := q.db.QueryRow(ctx, createOrder,
+		arg.UserID,
+		arg.CanteenID,
+		arg.PaymentMethod,
+		arg.PaymentStatus,
+		arg.OrderStatus,
+		arg.TotalAmount,
+	)
 	var i Order
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
 		&i.CanteenID,
+		&i.PaymentMethod,
 		&i.PaymentStatus,
 		&i.OrderStatus,
 		&i.TotalAmount,
@@ -98,7 +115,7 @@ func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams
 }
 
 const getOrderByID = `-- name: GetOrderByID :one
-SELECT id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at
+SELECT id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
 FROM orders
 WHERE id = $1
 `
@@ -110,6 +127,7 @@ func (q *Queries) GetOrderByID(ctx context.Context, id pgtype.UUID) (Order, erro
 		&i.ID,
 		&i.UserID,
 		&i.CanteenID,
+		&i.PaymentMethod,
 		&i.PaymentStatus,
 		&i.OrderStatus,
 		&i.TotalAmount,
@@ -124,6 +142,7 @@ SELECT
 	o.id AS order_id,
 	o.user_id AS order_user_id,
 	o.canteen_id AS order_canteen_id,
+	o.payment_method AS order_payment_method,
 	o.payment_status AS order_payment_status,
 	o.order_status AS order_status,
 	o.total_amount AS order_total_amount,
@@ -149,6 +168,7 @@ type GetOrderWithItemsByIDRow struct {
 	OrderID             pgtype.UUID        `json:"order_id"`
 	OrderUserID         pgtype.UUID        `json:"order_user_id"`
 	OrderCanteenID      pgtype.UUID        `json:"order_canteen_id"`
+	OrderPaymentMethod  PaymentMethod      `json:"order_payment_method"`
 	OrderPaymentStatus  PaymentStatus      `json:"order_payment_status"`
 	OrderStatus         OrderStatus        `json:"order_status"`
 	OrderTotalAmount    int32              `json:"order_total_amount"`
@@ -178,6 +198,7 @@ func (q *Queries) GetOrderWithItemsByID(ctx context.Context, id pgtype.UUID) ([]
 			&i.OrderID,
 			&i.OrderUserID,
 			&i.OrderCanteenID,
+			&i.OrderPaymentMethod,
 			&i.OrderPaymentStatus,
 			&i.OrderStatus,
 			&i.OrderTotalAmount,
@@ -204,7 +225,7 @@ func (q *Queries) GetOrderWithItemsByID(ctx context.Context, id pgtype.UUID) ([]
 }
 
 const listOrdersByCanteenID = `-- name: ListOrdersByCanteenID :many
-SELECT id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at
+SELECT id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
 FROM orders
 WHERE canteen_id = $1
 ORDER BY created_at DESC
@@ -223,6 +244,7 @@ func (q *Queries) ListOrdersByCanteenID(ctx context.Context, canteenID pgtype.UU
 			&i.ID,
 			&i.UserID,
 			&i.CanteenID,
+			&i.PaymentMethod,
 			&i.PaymentStatus,
 			&i.OrderStatus,
 			&i.TotalAmount,
@@ -240,7 +262,7 @@ func (q *Queries) ListOrdersByCanteenID(ctx context.Context, canteenID pgtype.UU
 }
 
 const listOrdersByUserID = `-- name: ListOrdersByUserID :many
-SELECT id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at
+SELECT id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
 FROM orders
 WHERE user_id = $1
 ORDER BY created_at DESC
@@ -259,6 +281,7 @@ func (q *Queries) ListOrdersByUserID(ctx context.Context, userID pgtype.UUID) ([
 			&i.ID,
 			&i.UserID,
 			&i.CanteenID,
+			&i.PaymentMethod,
 			&i.PaymentStatus,
 			&i.OrderStatus,
 			&i.TotalAmount,
@@ -280,7 +303,7 @@ UPDATE orders
 SET payment_status = 'PAID',
 	updated_at = now()
 WHERE id = $1 AND payment_status = 'UNPAID'
-RETURNING id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
 `
 
 func (q *Queries) MarkOrderPaid(ctx context.Context, id pgtype.UUID) (Order, error) {
@@ -290,6 +313,125 @@ func (q *Queries) MarkOrderPaid(ctx context.Context, id pgtype.UUID) (Order, err
 		&i.ID,
 		&i.UserID,
 		&i.CanteenID,
+		&i.PaymentMethod,
+		&i.PaymentStatus,
+		&i.OrderStatus,
+		&i.TotalAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setOrderCashlessConfirmed = `-- name: SetOrderCashlessConfirmed :one
+UPDATE orders
+SET order_status = 'WAITING',
+	payment_status = 'AWAITING_VERIFICATION',
+	updated_at = now()
+WHERE id = $1 AND order_status = 'PAYMENT' AND payment_status = 'UNPAID'
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
+`
+
+func (q *Queries) SetOrderCashlessConfirmed(ctx context.Context, id pgtype.UUID) (Order, error) {
+	row := q.db.QueryRow(ctx, setOrderCashlessConfirmed, id)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CanteenID,
+		&i.PaymentMethod,
+		&i.PaymentStatus,
+		&i.OrderStatus,
+		&i.TotalAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setOrderPaymentStatus = `-- name: SetOrderPaymentStatus :one
+UPDATE orders
+SET payment_status = $2,
+	updated_at = now()
+WHERE id = $1
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
+`
+
+type SetOrderPaymentStatusParams struct {
+	ID            pgtype.UUID   `json:"id"`
+	PaymentStatus PaymentStatus `json:"payment_status"`
+}
+
+func (q *Queries) SetOrderPaymentStatus(ctx context.Context, arg SetOrderPaymentStatusParams) (Order, error) {
+	row := q.db.QueryRow(ctx, setOrderPaymentStatus, arg.ID, arg.PaymentStatus)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CanteenID,
+		&i.PaymentMethod,
+		&i.PaymentStatus,
+		&i.OrderStatus,
+		&i.TotalAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const setOrderPaymentStatusAndOrderStatus = `-- name: SetOrderPaymentStatusAndOrderStatus :one
+UPDATE orders
+SET payment_status = $2,
+	order_status = $3,
+	updated_at = now()
+WHERE id = $1
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
+`
+
+type SetOrderPaymentStatusAndOrderStatusParams struct {
+	ID            pgtype.UUID   `json:"id"`
+	PaymentStatus PaymentStatus `json:"payment_status"`
+	OrderStatus   OrderStatus   `json:"order_status"`
+}
+
+func (q *Queries) SetOrderPaymentStatusAndOrderStatus(ctx context.Context, arg SetOrderPaymentStatusAndOrderStatusParams) (Order, error) {
+	row := q.db.QueryRow(ctx, setOrderPaymentStatusAndOrderStatus, arg.ID, arg.PaymentStatus, arg.OrderStatus)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CanteenID,
+		&i.PaymentMethod,
+		&i.PaymentStatus,
+		&i.OrderStatus,
+		&i.TotalAmount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateOrderStatus = `-- name: UpdateOrderStatus :one
+UPDATE orders
+SET order_status = $2,
+	updated_at = now()
+WHERE id = $1
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
+`
+
+type UpdateOrderStatusParams struct {
+	ID          pgtype.UUID `json:"id"`
+	OrderStatus OrderStatus `json:"order_status"`
+}
+
+func (q *Queries) UpdateOrderStatus(ctx context.Context, arg UpdateOrderStatusParams) (Order, error) {
+	row := q.db.QueryRow(ctx, updateOrderStatus, arg.ID, arg.OrderStatus)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.CanteenID,
+		&i.PaymentMethod,
 		&i.PaymentStatus,
 		&i.OrderStatus,
 		&i.TotalAmount,
@@ -304,7 +446,7 @@ UPDATE orders
 SET order_status = $2,
 	updated_at = now()
 WHERE id = $1 AND payment_status = 'PAID'
-RETURNING id, user_id, canteen_id, payment_status, order_status, total_amount, created_at, updated_at
+RETURNING id, user_id, canteen_id, payment_method, payment_status, order_status, total_amount, created_at, updated_at
 `
 
 type UpdateOrderStatusIfPaidParams struct {
@@ -319,6 +461,7 @@ func (q *Queries) UpdateOrderStatusIfPaid(ctx context.Context, arg UpdateOrderSt
 		&i.ID,
 		&i.UserID,
 		&i.CanteenID,
+		&i.PaymentMethod,
 		&i.PaymentStatus,
 		&i.OrderStatus,
 		&i.TotalAmount,

@@ -23,7 +23,7 @@ INSERT INTO canteens (
 	$2,
 	$3
 )
-RETURNING id, name, location, owner_id, created_at, updated_at
+RETURNING id, name, location, owner_id, qris_static_url, qris_static_updated_at, created_at, updated_at
 `
 
 type CreateCanteenParams struct {
@@ -40,6 +40,8 @@ func (q *Queries) CreateCanteen(ctx context.Context, arg CreateCanteenParams) (C
 		&i.Name,
 		&i.Location,
 		&i.OwnerID,
+		&i.QrisStaticUrl,
+		&i.QrisStaticUpdatedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -47,7 +49,7 @@ func (q *Queries) CreateCanteen(ctx context.Context, arg CreateCanteenParams) (C
 }
 
 const getCanteenByID = `-- name: GetCanteenByID :one
-SELECT id, name, location, owner_id, created_at, updated_at
+SELECT id, name, location, owner_id, qris_static_url, qris_static_updated_at, created_at, updated_at
 FROM canteens
 WHERE id = $1
 `
@@ -60,9 +62,30 @@ func (q *Queries) GetCanteenByID(ctx context.Context, id pgtype.UUID) (Canteen, 
 		&i.Name,
 		&i.Location,
 		&i.OwnerID,
+		&i.QrisStaticUrl,
+		&i.QrisStaticUpdatedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getCanteenQRISStaticByID = `-- name: GetCanteenQRISStaticByID :one
+SELECT id, qris_static_url, qris_static_updated_at
+FROM canteens
+WHERE id = $1
+`
+
+type GetCanteenQRISStaticByIDRow struct {
+	ID                  pgtype.UUID        `json:"id"`
+	QrisStaticUrl       pgtype.Text        `json:"qris_static_url"`
+	QrisStaticUpdatedAt pgtype.Timestamptz `json:"qris_static_updated_at"`
+}
+
+func (q *Queries) GetCanteenQRISStaticByID(ctx context.Context, id pgtype.UUID) (GetCanteenQRISStaticByIDRow, error) {
+	row := q.db.QueryRow(ctx, getCanteenQRISStaticByID, id)
+	var i GetCanteenQRISStaticByIDRow
+	err := row.Scan(&i.ID, &i.QrisStaticUrl, &i.QrisStaticUpdatedAt)
 	return i, err
 }
 
@@ -72,15 +95,24 @@ FROM canteens
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListCanteens(ctx context.Context) ([]Canteen, error) {
+type ListCanteensRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	Location  pgtype.Text        `json:"location"`
+	OwnerID   pgtype.UUID        `json:"owner_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListCanteens(ctx context.Context) ([]ListCanteensRow, error) {
 	rows, err := q.db.Query(ctx, listCanteens)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Canteen{}
+	items := []ListCanteensRow{}
 	for rows.Next() {
-		var i Canteen
+		var i ListCanteensRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -100,7 +132,7 @@ func (q *Queries) ListCanteens(ctx context.Context) ([]Canteen, error) {
 }
 
 const listCanteensByOwnerID = `-- name: ListCanteensByOwnerID :many
-SELECT id, name, location, owner_id, created_at, updated_at
+SELECT id, name, location, owner_id, qris_static_url, qris_static_updated_at, created_at, updated_at
 FROM canteens
 WHERE owner_id = $1
 ORDER BY created_at DESC
@@ -120,6 +152,8 @@ func (q *Queries) ListCanteensByOwnerID(ctx context.Context, ownerID pgtype.UUID
 			&i.Name,
 			&i.Location,
 			&i.OwnerID,
+			&i.QrisStaticUrl,
+			&i.QrisStaticUpdatedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -131,4 +165,34 @@ func (q *Queries) ListCanteensByOwnerID(ctx context.Context, ownerID pgtype.UUID
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateCanteenQRISStatic = `-- name: UpdateCanteenQRISStatic :one
+UPDATE canteens
+SET qris_static_url = $2,
+	qris_static_updated_at = now(),
+	updated_at = now()
+WHERE id = $1
+RETURNING id, name, location, owner_id, qris_static_url, qris_static_updated_at, created_at, updated_at
+`
+
+type UpdateCanteenQRISStaticParams struct {
+	ID            pgtype.UUID `json:"id"`
+	QrisStaticUrl pgtype.Text `json:"qris_static_url"`
+}
+
+func (q *Queries) UpdateCanteenQRISStatic(ctx context.Context, arg UpdateCanteenQRISStaticParams) (Canteen, error) {
+	row := q.db.QueryRow(ctx, updateCanteenQRISStatic, arg.ID, arg.QrisStaticUrl)
+	var i Canteen
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Location,
+		&i.OwnerID,
+		&i.QrisStaticUrl,
+		&i.QrisStaticUpdatedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
