@@ -179,6 +179,7 @@ erDiagram
 ## 10. API Documentation
 
 - OpenAPI: docs/openapi.yaml
+- Apidog: https://wh1ozyp0kd.apidog.io
 - Import into Swagger UI, Postman, or Apidog.
 - Authentication: Authorization: Bearer <token>
 
@@ -322,10 +323,10 @@ See CONTRIBUTING.md.
 
 ## 20. Author Information
 
-- Full Name: TBD
-- Student ID: TBD
-- University: TBD
-- Program: TBD
+- Full Name: Aryan Zaky Prayogo
+- Student ID (NIM): 255150207111059
+- University: Universitas Brawijaya
+- Major: Informatics
 
 ## Confirmation
 
