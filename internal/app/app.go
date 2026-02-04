@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"time"
 
+	"freepass-2026/internal/ai"
 	"freepass-2026/internal/auth"
 	"freepass-2026/internal/config"
 	db "freepass-2026/internal/db"
@@ -39,6 +41,8 @@ func Build(ctx context.Context) (*App, error) {
 	ownerMenuHandler := handlers.NewOwnerMenuHandler(queries)
 	ownerOrderHandler := handlers.NewOwnerOrderHandler(pool, queries)
 	adminHandler := handlers.NewAdminHandler(queries, cfg)
-	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool, Auth: authService, Canteen: canteenHandler, Order: orderHandler, Payment: paymentHandler, Feedback: feedbackHandler, OwnerMenu: ownerMenuHandler, OwnerOrder: ownerOrderHandler, Admin: adminHandler})
+	aiClient := ai.NewClient(cfg.GeminiAPIKey, cfg.GeminiModel, time.Duration(cfg.AITimeoutSeconds)*time.Second)
+	aiHandler := handlers.NewAIHandler(queries, aiClient, time.Now)
+	engine := http.NewRouter(http.Dependencies{Queries: queries, Pool: pool, Auth: authService, Canteen: canteenHandler, Order: orderHandler, Payment: paymentHandler, Feedback: feedbackHandler, OwnerMenu: ownerMenuHandler, OwnerOrder: ownerOrderHandler, Admin: adminHandler, AI: aiHandler})
 	return &App{Cfg: cfg, Pool: pool, Queries: queries, Engine: engine}, nil
 }

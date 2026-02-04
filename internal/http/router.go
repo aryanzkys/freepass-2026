@@ -21,6 +21,7 @@ type Dependencies struct {
 	OwnerMenu  *handlers.OwnerMenuHandler
 	OwnerOrder *handlers.OwnerOrderHandler
 	Admin      *handlers.AdminHandler
+	AI         *handlers.AIHandler
 }
 
 func NewRouter(deps Dependencies) *gin.Engine {
@@ -41,6 +42,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	me.PUT("", profileHandler.UpdateMe)
 	engine.GET("/canteens", deps.Canteen.ListCanteens)
 	engine.GET("/canteens/:canteenId/menus", deps.Canteen.ListMenusByCanteen)
+	engine.GET("/canteens/:canteenId/ai/recommendation-explain", middleware.RequireAuth(deps.Auth), middleware.RequireRole("USER", "ADMIN", "OWNER"), deps.AI.UserRecommendationExplain)
 	orders := engine.Group("/orders")
 	orders.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("USER", "ADMIN"))
 	orders.GET("", deps.Order.ListMyOrders)
@@ -58,11 +60,13 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	owner.PATCH("/orders/:orderId/status", deps.OwnerOrder.UpdateOrderStatus)
 	owner.PATCH("/orders/:orderId/payment/verify", deps.OwnerOrder.VerifyOrderPayment)
 	owner.DELETE("/feedbacks/:feedbackId", deps.Feedback.RemoveFeedbackAsOwner)
+	owner.GET("/ai/feedback-insights", deps.AI.OwnerFeedbackInsights)
 	admin := engine.Group("/admin")
 	admin.Use(middleware.RequireAuth(deps.Auth), middleware.RequireRole("ADMIN"))
 	admin.POST("/owners", deps.Admin.CreateOwner)
 	admin.PUT("/owners/:ownerId", deps.Admin.UpdateOwner)
 	admin.DELETE("/accounts/:userId", deps.Admin.DeleteAccount)
 	admin.PUT("/canteens/:canteenId/qris", deps.Admin.UpdateCanteenQRIS)
+	admin.GET("/ai/oversight", deps.AI.AdminOversight)
 	return engine
 }

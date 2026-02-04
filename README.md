@@ -26,6 +26,12 @@ Required variables:
 - JWT_SECRET
 - APP_PORT
 
+Optional AI variables:
+
+- GEMINI_API_KEY
+- GEMINI_MODEL
+- AI_TIMEOUT_SECONDS
+
 ## Database setup
 
 Option A: Local PostgreSQL
@@ -71,6 +77,48 @@ go test ./...
 ## API documentation
 
 Open docs/openapi.yaml in your preferred OpenAPI viewer.
+
+## AI Feedback Analyzer
+
+AI endpoints are read-only and use aggregate data only. User identifiers are not included in prompts or responses.
+
+Model default: gemini-2.5-flash
+
+If GEMINI_API_KEY is missing, AI endpoints return 503 ai_not_configured.
+
+## AI examples (PowerShell)
+
+Owner feedback insights
+
+try {
+	Invoke-RestMethod -Method Get -Uri "http://localhost:8080/owner/canteens/$env:CANTEEN_ID/ai/feedback-insights?days=30" -Headers @{Authorization="Bearer $env:OWNER_TOKEN"}
+} catch {
+	$_.Exception.Message
+}
+
+User recommendation explain
+
+try {
+	Invoke-RestMethod -Method Get -Uri "http://localhost:8080/canteens/$env:CANTEEN_ID/ai/recommendation-explain?days=30" -Headers @{Authorization="Bearer $env:TOKEN"}
+} catch {
+	$_.Exception.Message
+}
+
+User recommendation explain by menu item
+
+try {
+	Invoke-RestMethod -Method Get -Uri "http://localhost:8080/canteens/$env:CANTEEN_ID/ai/recommendation-explain?days=30&menu_item_id=$env:MENU_ID" -Headers @{Authorization="Bearer $env:TOKEN"}
+} catch {
+	$_.Exception.Message
+}
+
+Admin oversight
+
+try {
+	Invoke-RestMethod -Method Get -Uri "http://localhost:8080/admin/ai/oversight?days=30" -Headers @{Authorization="Bearer $env:ADMIN_TOKEN"}
+} catch {
+	$_.Exception.Message
+}
 
 ## Payment methods
 

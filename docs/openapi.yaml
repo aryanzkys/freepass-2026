@@ -490,6 +490,133 @@ components:
           type: boolean
       required:
         - deleted
+    AIFeedbackInsightsResponse:
+      type: object
+      properties:
+        canteen_id:
+          type: string
+        range_days:
+          type: integer
+        summary:
+          type: string
+        sentiment:
+          type: object
+          properties:
+            label:
+              type: string
+            score:
+              type: number
+          required:
+            - label
+            - score
+        top_themes:
+          type: array
+          items:
+            type: object
+            properties:
+              theme:
+                type: string
+              count:
+                type: integer
+            required:
+              - theme
+              - count
+        action_items:
+          type: array
+          items:
+            type: string
+        notable_quotes:
+          type: array
+          items:
+            type: string
+        generated_at:
+          type: string
+        model:
+          type: string
+      required:
+        - canteen_id
+        - range_days
+        - summary
+        - sentiment
+        - top_themes
+        - action_items
+        - notable_quotes
+        - generated_at
+        - model
+    AIRecommendationExplainResponse:
+      type: object
+      properties:
+        canteen_id:
+          type: string
+        menu_item_id:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: "null"
+        explanation:
+          type: string
+        signals:
+          type: array
+          items:
+            type: object
+            properties:
+              signal:
+                type: string
+              value:
+                type: string
+            required:
+              - signal
+              - value
+        generated_at:
+          type: string
+        model:
+          type: string
+      required:
+        - canteen_id
+        - menu_item_id
+        - explanation
+        - signals
+        - generated_at
+        - model
+    AIOversightResponse:
+      type: object
+      properties:
+        range_days:
+          type: integer
+        watchlist:
+          type: array
+          items:
+            type: object
+            properties:
+              canteen_id:
+                type: string
+              canteen_name:
+                type: string
+              risk_summary:
+                type: string
+              top_complaints:
+                type: array
+                items:
+                  type: string
+              suggested_followups:
+                type: array
+                items:
+                  type: string
+            required:
+              - canteen_id
+              - canteen_name
+              - risk_summary
+              - top_complaints
+              - suggested_followups
+        generated_at:
+          type: string
+        model:
+          type: string
+      required:
+        - range_days
+        - watchlist
+        - generated_at
+        - model
 paths:
   /health:
     get:
@@ -611,6 +738,72 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /canteens/{canteenId}/ai/recommendation-explain:
+    get:
+      summary: Explain canteen or menu recommendation
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: days
+          required: false
+          schema:
+            type: integer
+            minimum: 7
+            maximum: 90
+        - in: query
+          name: menu_item_id
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIRecommendationExplainResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: AI not configured
           content:
             application/json:
               schema:
@@ -1254,6 +1447,67 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /owner/canteens/{canteenId}/ai/feedback-insights:
+    get:
+      summary: AI feedback insights for owner
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: canteenId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: days
+          required: false
+          schema:
+            type: integer
+            minimum: 7
+            maximum: 90
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIFeedbackInsightsResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: AI not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /admin/owners:
     post:
       summary: Create canteen owner
@@ -1308,6 +1562,56 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: Email exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /admin/ai/oversight:
+    get:
+      summary: AI oversight watchlist
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: days
+          required: false
+          schema:
+            type: integer
+            minimum: 7
+            maximum: 90
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIOversightResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: AI not configured
           content:
             application/json:
               schema:
