@@ -1,198 +1,333 @@
 # BCC Canteen
 
-BCC Canteen backend API built with Go, Gin, PostgreSQL, and sqlc.
+BCC Canteen is a role-based digital canteen ordering backend that supports user ordering, payment management, owner operations, and admin oversight, with read-only AI insights for feedback analysis.
 
-## Tech stack
+## 1. Project Title and Overview
 
-- Go
-- Gin
-- PostgreSQL
-- sqlc
+**Problem statement:** traditional canteen ordering is fragmented and lacks real-time visibility for customers and owners.
 
-## Requirements
+**System goals:**
+
+- Digital canteen ordering
+- Payment management
+- Role-based management
+- AI insights support
+
+## 2. Key Features
+
+### User Features
+
+- Account registration
+- Login & profile management
+- Browse canteens and menus
+- Order placement with stock validation
+- Cash & Cashless QRIS payment
+- Order tracking
+- Feedback submission
+- AI recommendation explanation
+
+### Canteen Owner Features
+
+- Menu CRUD with stock management
+- Incoming order dashboard
+- Payment verification for QRIS
+- Order workflow control
+- Feedback moderation
+- AI feedback insights
+
+### Admin Features
+
+- Owner account lifecycle management
+- User account moderation
+- QRIS configuration per canteen
+- AI oversight analytics
+
+## 3. Technology Stack
+
+- **Go**: fast, static, production-friendly runtime.
+- **Gin**: lightweight HTTP routing and middleware.
+- **PostgreSQL**: relational storage with strong consistency.
+- **sqlc**: type-safe SQL access and compile-time validation.
+- **JWT Authentication**: stateless auth with role claims.
+- **Gemini AI Integration**: read-only insights and summaries.
+- **REST API Architecture**: simple, interoperable HTTP surface.
+
+## 4. System Architecture
+
+### High-Level Architecture Description
+
+- **Handler layer**: Gin handlers enforce RBAC and validation.
+- **Business logic**: implemented directly in handlers to keep flow explicit and transactional.
+- **Repository layer**: sqlc-generated queries provide typed DB access.
+- **Database layer**: PostgreSQL enforces constraints and consistency.
+- **AI integration**: Gemini client generates structured insights from aggregated data.
+
+### Architecture Diagram
+
+```mermaid
+flowchart LR
+	Client --> API[REST API]
+	API --> Handlers[Handlers]
+	Handlers --> SQLC[sqlc Queries]
+	SQLC --> DB[(PostgreSQL)]
+	API --> AI[AI Integration]
+	AI --> Gemini[Gemini API]
+```
+
+## 5. Role-Based Access Control
+
+- **USER**: can order, pay, and provide feedback.
+- **OWNER**: manages menus and order workflow for owned canteens.
+- **ADMIN**: manages owners, accounts, and system-wide settings.
+- **Ownership rule**: OWNER endpoints are scoped to canteens they own; ADMIN bypasses ownership checks.
+
+## 6. Order Lifecycle
+
+### CASH Order Flow
+
+WAITING → COOKING → READY → COMPLETED
+
+```mermaid
+stateDiagram-v2
+	[*] --> WAITING
+	WAITING --> COOKING
+	COOKING --> READY
+	READY --> COMPLETED
+```
+
+### CASHLESS QRIS Order Flow
+
+PAYMENT → WAITING → COOKING → READY → COMPLETED
+
+Verification flow:
+- User confirms payment: payment_status becomes AWAITING_VERIFICATION
+- Owner approves: payment_status becomes PAID
+- Owner rejects: payment_status becomes REJECTED and refund record created
+
+```mermaid
+stateDiagram-v2
+	[*] --> PAYMENT
+	PAYMENT --> WAITING: user_confirmed
+	WAITING --> COOKING
+	COOKING --> READY
+	READY --> COMPLETED
+```
+
+## 7. Payment System Design
+
+- **Static QRIS per canteen**: admin configures a QRIS URL per canteen.
+- **Manual verification**: owner approves or rejects QRIS confirmations.
+- **Refund record**: rejection creates a refund record for tracking.
+- **Idempotency handling**: duplicate confirmations are rejected.
+- **Payment status management**: UNPAID → AWAITING_VERIFICATION → PAID or REJECTED.
+
+## 8. AI Features
+
+### AI Feedback Analyzer
+
+- Sentiment detection
+- Complaint clustering
+- Action recommendations
+
+### AI Recommendation Explanation
+
+- Explains why a canteen or menu item is recommended
+
+### AI Oversight Analytics
+
+- Admin watchlist signals for risk trends
+
+Privacy guarantees:
+
+- Aggregated data only
+- No PII exposure
+- Read-only AI usage
+
+## 9. Database Design Overview
+
+Key entities:
+
+- users, canteens, menu_items
+- orders, order_items
+- payments, payment_verifications, refunds
+- feedbacks, menu_ratings
+
+Transaction safety:
+
+- Order creation and stock updates are atomic.
+- Feedback and menu ratings are recorded in a single transaction.
+
+Stock locking:
+
+- menu_items rows are locked during order creation to prevent oversell.
+
+ER diagram:
+
+```mermaid
+erDiagram
+	users ||--o{ canteens : owns
+	canteens ||--o{ menu_items : has
+	users ||--o{ orders : places
+	orders ||--o{ order_items : includes
+	orders ||--o| payments : has
+	orders ||--o| payment_verifications : has
+	orders ||--o{ refunds : creates
+	orders ||--o| feedbacks : has
+	menu_items ||--o{ menu_ratings : receives
+```
+
+## 10. API Documentation
+
+- OpenAPI: docs/openapi.yaml
+- Import into Swagger UI, Postman, or Apidog.
+- Authentication: Authorization: Bearer <token>
+
+## 11. Installation Guide
+
+### Requirements
 
 - Go 1.22+
 - PostgreSQL 15+
+- Git
 
-## Environment
+### Step-by-Step Setup
 
-Copy the environment file and update values as needed.
+1. Clone the repository
 
+```bash
+git clone <repo-url>
+cd freepass-2026
+```
+
+2. Set environment variables
+
+```bash
 cp .env.example .env
+```
 
-Required variables:
-
-- DATABASE_URL
-- JWT_SECRET
-- APP_PORT
-
-Optional AI variables:
-
-- GEMINI_API_KEY
-- GEMINI_MODEL
-- AI_TIMEOUT_SECONDS
-
-## Database setup
-
-Option A: Local PostgreSQL
-
-1. Create a database
-2. Set DATABASE_URL in .env
 3. Apply migrations
 
-Option B: Docker Compose PostgreSQL
-
-docker compose up -d
-
-Set DATABASE_URL to:
-
-postgres://postgres:postgres@localhost:5432/bcc_canteen?sslmode=disable
-
-Option C: Supabase PostgreSQL
-
-1. Create a Supabase project
-2. Get the connection string
-3. Set DATABASE_URL
-
-## Migrations
-
-If you do not use a migration tool, run the SQL files manually in order:
-
+```bash
 psql "$env:DATABASE_URL" -f migrations/000001_init.sql
 psql "$env:DATABASE_URL" -f migrations/000002_improvements.sql
 psql "$env:DATABASE_URL" -f migrations/000002_menu_ratings.sql
+```
 
-## sqlc
+4. Generate sqlc code
 
+```bash
 sqlc generate
+```
 
-## Run the server
+5. Run the server
 
+```bash
 go run ./cmd/api
+```
 
-## Run tests
+6. Test the health endpoint
 
+```bash
+curl http://localhost:8080/health
+```
+
+## 12. Environment Variables
+
+- **DATABASE_URL**: PostgreSQL connection string.
+- **JWT_SECRET**: JWT signing secret.
+- **APP_PORT**: HTTP server port.
+- **GEMINI_API_KEY**: Gemini API key for AI features.
+- **GEMINI_MODEL**: Gemini model name (default: gemini-2.5-flash).
+- **AI_TIMEOUT_SECONDS**: AI request timeout in seconds.
+- **SERVER_PORT**: Not used by current implementation; use APP_PORT.
+
+## 13. Development Workflow
+
+- Use feature branches and pull requests.
+- Follow repository conventions in CONVENTION.md.
+- Run tests before merging.
+
+## 14. Testing Guide
+
+### Unit tests
+
+```bash
 go test ./...
+```
 
-## API documentation
-
-Open docs/openapi.yaml in your preferred OpenAPI viewer.
-
-## AI Feedback Analyzer
-
-AI endpoints are read-only and use aggregate data only. User identifiers are not included in prompts or responses.
-
-Model default: gemini-2.5-flash
-
-If GEMINI_API_KEY is missing, AI endpoints return 503 ai_not_configured.
-
-## AI examples (PowerShell)
-
-Owner feedback insights
-
-try {
-	Invoke-RestMethod -Method Get -Uri "http://localhost:8080/owner/canteens/$env:CANTEEN_ID/ai/feedback-insights?days=30" -Headers @{Authorization="Bearer $env:OWNER_TOKEN"}
-} catch {
-	$_.Exception.Message
-}
-
-User recommendation explain
-
-try {
-	Invoke-RestMethod -Method Get -Uri "http://localhost:8080/canteens/$env:CANTEEN_ID/ai/recommendation-explain?days=30" -Headers @{Authorization="Bearer $env:TOKEN"}
-} catch {
-	$_.Exception.Message
-}
-
-User recommendation explain by menu item
-
-try {
-	Invoke-RestMethod -Method Get -Uri "http://localhost:8080/canteens/$env:CANTEEN_ID/ai/recommendation-explain?days=30&menu_item_id=$env:MENU_ID" -Headers @{Authorization="Bearer $env:TOKEN"}
-} catch {
-	$_.Exception.Message
-}
-
-Admin oversight
-
-try {
-	Invoke-RestMethod -Method Get -Uri "http://localhost:8080/admin/ai/oversight?days=30" -Headers @{Authorization="Bearer $env:ADMIN_TOKEN"}
-} catch {
-	$_.Exception.Message
-}
-
-## Payment methods
-
-The API supports CASH and CASHLESS_QRIS.
-
-CASH flow:
-
-- order_status starts WAITING
-- payment_status starts UNPAID
-
-CASHLESS_QRIS flow:
-
-- order_status starts PAYMENT
-- payment_status starts UNPAID
-- user confirms payment, order_status becomes WAITING and payment_status becomes AWAITING_VERIFICATION
-- owner approves to set payment_status PAID or rejects to set payment_status REJECTED and order_status PAYMENT with a refund record
-
-## QRIS setup
-
-Admin uploads a static QRIS URL per canteen using:
-
-PUT /admin/canteens/:canteenId/qris
-
-## Payment examples (PowerShell)
-
-Create CASH order
-
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/orders" -Headers @{Authorization="Bearer $env:TOKEN"} -ContentType "application/json" -Body '{"canteen_id":"'$env:CANTEEN_ID'","payment_method":"CASH","items":[{"menu_item_id":"'$env:MENU_ID'","qty":1}]}'
-
-Create CASHLESS_QRIS order
-
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/orders" -Headers @{Authorization="Bearer $env:TOKEN"} -ContentType "application/json" -Body '{"canteen_id":"'$env:CANTEEN_ID'","payment_method":"CASHLESS_QRIS","items":[{"menu_item_id":"'$env:MENU_ID'","qty":1}]}'
-
-Get QRIS info
-
-Invoke-RestMethod -Method Get -Uri "http://localhost:8080/orders/$env:ORDER_ID/payment/qris" -Headers @{Authorization="Bearer $env:TOKEN"}
-
-Confirm QRIS paid
-
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/orders/$env:ORDER_ID/payment/qris/confirm" -Headers @{Authorization="Bearer $env:TOKEN"}
-
-Owner approve QRIS
-
-Invoke-RestMethod -Method Patch -Uri "http://localhost:8080/owner/canteens/$env:CANTEEN_ID/orders/$env:ORDER_ID/payment/verify" -Headers @{Authorization="Bearer $env:OWNER_TOKEN"} -ContentType "application/json" -Body '{"action":"APPROVE"}'
-
-Owner reject QRIS
-
-Invoke-RestMethod -Method Patch -Uri "http://localhost:8080/owner/canteens/$env:CANTEEN_ID/orders/$env:ORDER_ID/payment/verify" -Headers @{Authorization="Bearer $env:OWNER_TOKEN"} -ContentType "application/json" -Body '{"action":"REJECT","reason":"Amount mismatch"}'
-
-## Admin testing
-
-Register a normal user, then promote it to ADMIN using SQL:
-
-UPDATE users SET role = 'ADMIN' WHERE email = 'admin@example.com';
-
-## Example API calls (PowerShell)
+### API testing (PowerShell)
 
 Register
 
+```powershell
 Invoke-RestMethod -Method Post -Uri "http://localhost:8080/auth/register" -ContentType "application/json" -Body '{"name":"Admin","email":"admin@example.com","password":"password123"}'
+```
 
 Login
 
+```powershell
 Invoke-RestMethod -Method Post -Uri "http://localhost:8080/auth/login" -ContentType "application/json" -Body '{"email":"admin@example.com","password":"password123"}'
+```
 
-Create owner (ADMIN token required)
+AI examples
 
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/admin/owners" -Headers @{Authorization="Bearer $env:TOKEN"} -ContentType "application/json" -Body '{"name":"Owner One","email":"owner@example.com","password":"password123","phone":"08123456789"}'
+```powershell
+Invoke-RestMethod -Method Get -Uri "http://localhost:8080/canteens/$env:CANTEEN_ID/ai/recommendation-explain?days=30" -Headers @{Authorization="Bearer $env:TOKEN"}
+```
 
-Update owner
+## 15. Error Handling Strategy
 
-Invoke-RestMethod -Method Put -Uri "http://localhost:8080/admin/owners/$env:OWNER_ID" -Headers @{Authorization="Bearer $env:TOKEN"} -ContentType "application/json" -Body '{"name":"Owner Updated","phone":"0899999999"}'
+Standard error response:
 
-Delete account
+```json
+{ "message": "validation_error", "details": { "field": "invalid" } }
+```
 
-Invoke-RestMethod -Method Delete -Uri "http://localhost:8080/admin/accounts/$env:USER_ID" -Headers @{Authorization="Bearer $env:TOKEN"}
+HTTP mapping:
+
+- 400 validation_error
+- 401 unauthorized
+- 403 forbidden
+- 404 not_found
+- 409 conflict
+- 500 internal_error
+- 502 ai_invalid_response
+- 503 ai_not_configured
+
+## 16. Security Considerations
+
+- JWT authentication for protected routes.
+- RBAC enforced at handler layer.
+- Ownership checks for OWNER endpoints.
+- Secrets are never hardcoded in source.
+- AI endpoints are read-only and do not expose PII.
+
+## 17. Performance and Scalability Notes
+
+- Indexed queries for frequent access patterns.
+- Transactional stock updates for consistency.
+- AI requests have timeouts and retries; keep them outside critical paths.
+- No in-process cache is enabled by default.
+
+## 18. Future Improvements
+
+- Integrate real payment gateways.
+- Add realtime order tracking.
+- Introduce advanced AI forecasting.
+- Provide mobile client support.
+
+## 19. Contributing Guidelines Reference
+
+See CONTRIBUTING.md.
+
+## 20. Author Information
+
+- Full Name: TBD
+- Student ID: TBD
+- University: TBD
+- Program: TBD
+
+## Confirmation
+
+Documentation matches current implementation.
 

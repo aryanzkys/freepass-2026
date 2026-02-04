@@ -2,44 +2,140 @@ openapi: 3.0.3
 info:
   title: BCC Canteen API
   version: 1.0.0
+  description: |
+    BCC Canteen is a canteen ordering backend that supports three actor roles: USER, OWNER, and ADMIN.
+
+    Roles:
+    - USER: browse menus, create orders, pay, and leave feedback.
+    - OWNER: manage menus, process incoming orders, and verify cashless payments.
+    - ADMIN: manage owner accounts and oversee system health.
+
+    Payment methods:
+    - CASH
+    - CASHLESS_QRIS
+
+    Order state machine:
+    - CASH flow: WAITING → COOKING → READY → COMPLETED
+    - CASHLESS_QRIS flow: PAYMENT → WAITING → COOKING → READY → COMPLETED
+
+    Payment state machine:
+    - UNPAID → AWAITING_VERIFICATION → PAID
+    - UNPAID → REJECTED → REFUNDED
+
+    Payment verification (CASHLESS_QRIS):
+    1) Order is created with order_status=PAYMENT and payment_status=UNPAID.
+    2) User retrieves QRIS static URL for the canteen.
+    3) User confirms payment, order_status becomes WAITING and payment_status becomes AWAITING_VERIFICATION.
+    4) Owner verifies payment: APPROVE sets payment_status=PAID; REJECT sets payment_status=REJECTED and creates a refund record.
+
+    AI features provide read-only, aggregated insights and never modify transactional data.
+
+    Authentication:
+    - JWT is required for protected endpoints.
+    - Send the token via Authorization header: Bearer <token>.
+    - Tokens include user ID and role claims; expiration is enforced by the server.
+
+    Standard error contract:
+    - 400: validation_error
+    - 401: unauthorized
+    - 403: forbidden
+    - 404: not_found
+    - 409: conflict
+    - 500: internal_error
+    - 502: ai_invalid_response
+    - 503: ai_not_configured
 servers:
   - url: http://localhost:8080
+tags:
+  - name: Authentication
+  - name: User
+  - name: Orders
+  - name: Payments
+  - name: Owner
+  - name: Admin
+  - name: AI
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        JWT authentication via Authorization header.
+        Example: Authorization: Bearer <token>
   schemas:
     ErrorResponse:
       type: object
       properties:
         message:
           type: string
+          description: Machine-readable error code.
         details:
           nullable: true
           oneOf:
             - type: object
             - type: "null"
+          description: Optional object with field-level error details.
       required:
         - message
         - details
+    OrderStatus:
+      type: string
+      description: |
+        Order lifecycle status.
+        - PAYMENT: awaiting cashless confirmation
+        - WAITING: accepted and queued
+        - COOKING: being prepared
+        - READY: ready for pickup
+        - COMPLETED: fulfilled
+      enum:
+        - PAYMENT
+        - WAITING
+        - COOKING
+        - READY
+        - COMPLETED
+    PaymentStatus:
+      type: string
+      description: |
+        Payment lifecycle status.
+        - UNPAID: not paid
+        - AWAITING_VERIFICATION: cashless payment confirmed by user, pending owner verification
+        - PAID: verified paid
+        - REJECTED: payment rejected by owner
+        - REFUNDED: refund processed
+      enum:
+        - UNPAID
+        - AWAITING_VERIFICATION
+        - PAID
+        - REJECTED
+        - REFUNDED
+    PaymentMethod:
+      type: string
+      description: Payment method selected at order creation.
+      enum:
+        - CASH
+        - CASHLESS_QRIS
     User:
       type: object
       properties:
         id:
           type: string
+          description: User ID.
         name:
           type: string
+          description: Display name.
         email:
           type: string
+          description: Email address used for login.
         role:
           type: string
+          description: User role.
         phone:
           nullable: true
           oneOf:
             - type: string
             - type: "null"
+          description: Optional phone number.
       required:
         - id
         - name
@@ -78,19 +174,25 @@ components:
       properties:
         id:
           type: string
+          description: Canteen ID.
         name:
           type: string
+          description: Canteen name.
         location:
           nullable: true
           oneOf:
             - type: string
             - type: "null"
+          description: Optional location.
         owner_id:
           type: string
+          description: Owner user ID.
         created_at:
           type: string
+          description: RFC3339 timestamp.
         updated_at:
           type: string
+          description: RFC3339 timestamp.
       required:
         - id
         - name
@@ -102,40 +204,53 @@ components:
       properties:
         id:
           type: string
+          description: Menu item ID.
         canteen_id:
           type: string
+          description: Canteen ID.
         name:
           type: string
+          description: Menu item name.
         description:
           nullable: true
           oneOf:
             - type: string
             - type: "null"
+          description: Optional description.
         price:
           type: integer
+          description: Unit price.
         stock:
           type: integer
+          description: Current stock.
         is_available:
           type: boolean
+          description: Availability flag.
         avg_rating:
           nullable: true
           oneOf:
             - type: number
               format: float
             - type: "null"
+          description: Average rating across non-removed ratings.
         rating_count:
           type: integer
+          description: Number of ratings.
         is_recommended:
           type: boolean
+          description: Recommendation flag based on rating rank.
         recommended_rank:
           nullable: true
           oneOf:
             - type: integer
             - type: "null"
+          description: Ranking order among recommended items.
         created_at:
           type: string
+          description: RFC3339 timestamp.
         updated_at:
           type: string
+          description: RFC3339 timestamp.
       required:
         - id
         - canteen_id
@@ -152,22 +267,28 @@ components:
       properties:
         id:
           type: string
+          description: Order ID.
         user_id:
           type: string
+          description: User ID.
         canteen_id:
           type: string
+          description: Canteen ID.
         payment_method:
-          type: string
+          $ref: "#/components/schemas/PaymentMethod"
         payment_status:
-          type: string
+          $ref: "#/components/schemas/PaymentStatus"
         order_status:
-          type: string
+          $ref: "#/components/schemas/OrderStatus"
         total_amount:
           type: integer
+          description: Total order amount.
         created_at:
           type: string
+          description: RFC3339 timestamp.
         updated_at:
           type: string
+          description: RFC3339 timestamp.
       required:
         - id
         - user_id
@@ -183,20 +304,28 @@ components:
       properties:
         id:
           type: string
+          description: Order item ID.
         order_id:
           type: string
+          description: Order ID.
         menu_item_id:
           type: string
+          description: Menu item ID.
         qty:
           type: integer
+          description: Quantity ordered.
         price_snapshot:
           type: integer
+          description: Unit price at order time.
         subtotal:
           type: integer
+          description: qty * price_snapshot.
         created_at:
           type: string
+          description: RFC3339 timestamp.
         updated_at:
           type: string
+          description: RFC3339 timestamp.
       required:
         - id
         - order_id
@@ -211,23 +340,31 @@ components:
       properties:
         id:
           type: string
+          description: Payment ID.
         order_id:
           type: string
+          description: Order ID.
         method:
           nullable: true
           oneOf:
             - type: string
             - type: "null"
+          description: Payment method label provided by client.
         amount:
           type: integer
+          description: Payment amount.
         status:
           type: string
+          description: Payment record status.
         paid_at:
           type: string
+          description: RFC3339 timestamp.
         created_at:
           type: string
+          description: RFC3339 timestamp.
         updated_at:
           type: string
+          description: RFC3339 timestamp.
       required:
         - id
         - order_id
@@ -241,28 +378,37 @@ components:
       properties:
         id:
           type: string
+          description: Feedback ID.
         order_id:
           type: string
+          description: Order ID.
         user_id:
           type: string
+          description: User ID.
         canteen_id:
           type: string
+          description: Canteen ID.
         rating:
           nullable: true
           oneOf:
             - type: integer
             - type: "null"
+          description: Optional overall rating.
         comment:
           nullable: true
           oneOf:
             - type: string
             - type: "null"
+          description: Optional free-form comment.
         is_removed:
           type: boolean
+          description: Soft deletion flag.
         created_at:
           type: string
+          description: RFC3339 timestamp.
         updated_at:
           type: string
+          description: RFC3339 timestamp.
       required:
         - id
         - order_id
@@ -332,16 +478,20 @@ components:
       properties:
         order_id:
           type: string
+          description: Order ID.
         canteen_id:
           type: string
+          description: Canteen ID.
         qris_static_url:
           type: string
+          description: QRIS static URL for payment.
         order_status:
-          type: string
+          $ref: "#/components/schemas/OrderStatus"
         payment_status:
-          type: string
+          $ref: "#/components/schemas/PaymentStatus"
         total_amount:
           type: integer
+          description: Total order amount.
       required:
         - order_id
         - canteen_id
@@ -354,23 +504,31 @@ components:
       properties:
         id:
           type: string
+          description: Verification ID.
         order_id:
           type: string
+          description: Order ID.
         canteen_id:
           type: string
+          description: Canteen ID.
         user_id:
           type: string
+          description: User ID.
         status:
           type: string
+          description: Verification status.
         rejection_reason:
           nullable: true
           oneOf:
             - type: string
             - type: "null"
+          description: Optional rejection reason.
         created_at:
           type: string
+          description: RFC3339 timestamp.
         updated_at:
           type: string
+          description: RFC3339 timestamp.
       required:
         - id
         - order_id
@@ -384,22 +542,31 @@ components:
       properties:
         id:
           type: string
+          description: Refund ID.
         order_id:
           type: string
+          description: Order ID.
         canteen_id:
           type: string
+          description: Canteen ID.
         user_id:
           type: string
+          description: User ID.
         amount:
           type: integer
+          description: Refund amount.
         reason:
           type: string
+          description: Refund reason.
         status:
           type: string
+          description: Refund status.
         created_at:
           type: string
+          description: RFC3339 timestamp.
         updated_at:
           type: string
+          description: RFC3339 timestamp.
       required:
         - id
         - order_id
@@ -617,16 +784,476 @@ components:
         - watchlist
         - generated_at
         - model
+  examples:
+    ErrorValidation:
+      summary: Validation error
+      value:
+        message: validation_error
+        details:
+          field: invalid
+    ErrorUnauthorized:
+      summary: Unauthorized
+      value:
+        message: unauthorized
+        details: null
+    ErrorForbidden:
+      summary: Forbidden
+      value:
+        message: forbidden
+        details: null
+    ErrorNotFound:
+      summary: Not found
+      value:
+        message: not_found
+        details: null
+    ErrorConflict:
+      summary: Conflict
+      value:
+        message: conflict
+        details: null
+    ErrorInternal:
+      summary: Internal error
+      value:
+        message: internal_error
+        details: null
+    ErrorAINotConfigured:
+      summary: AI not configured
+      value:
+        message: ai_not_configured
+        details: null
+    ErrorAIInvalidResponse:
+      summary: AI invalid response
+      value:
+        message: ai_invalid_response
+        details:
+          error: invalid_json
+    RegisterRequestMinimal:
+      summary: Minimal register request
+      value:
+        name: User One
+        email: user@example.com
+        password: password123
+    RegisterRequestFull:
+      summary: Full register request
+      value:
+        name: User One
+        email: user@example.com
+        password: password123
+        phone: "08123456789"
+    RegisterSuccess:
+      summary: Register success
+      value:
+        id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+        name: User One
+        email: user@example.com
+        role: USER
+        phone: "08123456789"
+    LoginRequest:
+      summary: Login request
+      value:
+        email: user@example.com
+        password: password123
+    LoginSuccess:
+      summary: Login success
+      value:
+        access_token: "<jwt>"
+        token_type: Bearer
+        expires_in: 3600
+        user:
+          id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+          name: User One
+          email: user@example.com
+          role: USER
+          phone: null
+    CanteenListSuccess:
+      summary: List canteens success
+      value:
+        data:
+          - id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+            name: BCC Canteen
+            location: Building A
+            owner_id: 0b0c41f0-8c9e-4bb7-91e7-2aaf7f1c0a11
+            created_at: "2026-02-05T10:00:00Z"
+            updated_at: "2026-02-05T10:00:00Z"
+    MenuListSuccess:
+      summary: List menu items success
+      value:
+        data:
+          - id: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+            canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+            name: Fried Rice
+            description: Spicy fried rice
+            price: 15000
+            stock: 10
+            is_available: true
+            avg_rating: 4.6
+            rating_count: 20
+            is_recommended: true
+            recommended_rank: 1
+            created_at: "2026-02-05T10:00:00Z"
+            updated_at: "2026-02-05T10:00:00Z"
+    CanteenListEmpty:
+      summary: Empty canteen list
+      value:
+        data: []
+    MenuListEmpty:
+      summary: Empty menu list
+      value:
+        data: []
+    CreateOrderMinimal:
+      summary: Minimal order request
+      value:
+        canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+        items:
+          - menu_item_id: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+            qty: 1
+    CreateOrderFull:
+      summary: Full order request
+      value:
+        canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+        payment_method: CASHLESS_QRIS
+        items:
+          - menu_item_id: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+            qty: 2
+    CreateOrderSuccess:
+      summary: Order created
+      value:
+        order:
+          id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+          user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+          canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+          payment_method: CASH
+          payment_status: UNPAID
+          order_status: WAITING
+          total_amount: 15000
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
+        items:
+          - id: 1a1a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+            order_id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+            menu_item_id: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+            qty: 1
+            price_snapshot: 15000
+            subtotal: 15000
+            created_at: "2026-02-05T10:00:00Z"
+            updated_at: "2026-02-05T10:00:00Z"
+    PaymentRequestMinimal:
+      summary: Minimal payment request
+      value:
+        method: CASH
+        amount: 15000
+    PaymentRequestFull:
+      summary: Full payment request
+      value:
+        method: CASH
+        amount: 15000
+    PaymentSuccess:
+      summary: Payment created
+      value:
+        payment:
+          id: 4f4f3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+          order_id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+          method: CASH
+          amount: 15000
+          status: VERIFIED
+          paid_at: "2026-02-05T10:00:00Z"
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
+        order:
+          id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+          user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+          canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+          payment_method: CASH
+          payment_status: PAID
+          order_status: WAITING
+          total_amount: 15000
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
+    OrderSuccess:
+      summary: Order response
+      value:
+        id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+        user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+        canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+        payment_method: CASH
+        payment_status: PAID
+        order_status: COOKING
+        total_amount: 15000
+        created_at: "2026-02-05T10:00:00Z"
+        updated_at: "2026-02-05T10:00:00Z"
+    FeedbackRequestMinimal:
+      summary: Minimal feedback request
+      value:
+        items:
+          - menu_item_id: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+            rating: 5
+    FeedbackRequestFull:
+      summary: Full feedback request
+      value:
+        comment: Fast service and tasty.
+        items:
+          - menu_item_id: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+            rating: 5
+    FeedbackSuccess:
+      summary: Feedback created
+      value:
+        feedback:
+          id: 6d6d3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+          order_id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+          user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+          canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+          rating: null
+          comment: Fast service and tasty.
+          is_removed: false
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
+    QRISInfoSuccess:
+      summary: QRIS info
+      value:
+        order_id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+        canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+        qris_static_url: https://example.com/qris.png
+        order_status: PAYMENT
+        payment_status: UNPAID
+        total_amount: 15000
+    QRISConfirmSuccess:
+      summary: QRIS confirmation
+      value:
+        order:
+          id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+          user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+          canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+          payment_method: CASHLESS_QRIS
+          payment_status: AWAITING_VERIFICATION
+          order_status: WAITING
+          total_amount: 15000
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
+        verification:
+          id: 8a8a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+          order_id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+          canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+          user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+          status: PENDING
+          rejection_reason: null
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
+    OwnerAIInsightsSuccess:
+      summary: Owner AI insights
+      value:
+        canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+        range_days: 30
+        summary: Customers appreciate fast service and taste.
+        sentiment:
+          label: positive
+          score: 0.72
+        top_themes:
+          - theme: fast_service
+            count: 12
+        action_items:
+          - Maintain consistency during peak hours.
+        notable_quotes:
+          - Fast service and tasty.
+        generated_at: "2026-02-05T10:00:00Z"
+        model: gemini-2.5-flash
+    UserAIExplainSuccess:
+      summary: User recommendation explanation
+      value:
+        canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+        menu_item_id: null
+        explanation: High average rating and many reviews.
+        signals:
+          - signal: high_average_rating
+            value: 4.6/5
+          - signal: many_reviews
+            value: 128 ratings
+        generated_at: "2026-02-05T10:00:00Z"
+        model: gemini-2.5-flash
+    AdminAIOversightSuccess:
+      summary: Admin AI oversight
+      value:
+        range_days: 30
+        watchlist:
+          - canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+            canteen_name: BCC Canteen
+            risk_summary: Elevated negative feedback trend.
+            top_complaints:
+              - slow_service
+            suggested_followups:
+              - Review peak-hour staffing.
+        generated_at: "2026-02-05T10:00:00Z"
+        model: gemini-2.5-flash
+    OwnerMenuCreateMinimal:
+      summary: Minimal menu create
+      value:
+        name: Fried Rice
+        price: 15000
+        stock: 20
+    OwnerMenuCreateFull:
+      summary: Full menu create
+      value:
+        name: Fried Rice
+        description: Spicy fried rice
+        price: 15000
+        stock: 20
+        is_available: true
+    OwnerMenuSuccess:
+      summary: Menu item response
+      value:
+        id: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+        canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+        name: Fried Rice
+        description: Spicy fried rice
+        price: 15000
+        stock: 20
+        is_available: true
+        avg_rating: null
+        rating_count: 0
+        is_recommended: false
+        recommended_rank: null
+        created_at: "2026-02-05T10:00:00Z"
+        updated_at: "2026-02-05T10:00:00Z"
+    OwnerOrderListSuccess:
+      summary: Incoming orders
+      value:
+        data:
+          - id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+            user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+            canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+            payment_method: CASH
+            payment_status: PAID
+            order_status: WAITING
+            total_amount: 15000
+            created_at: "2026-02-05T10:00:00Z"
+            updated_at: "2026-02-05T10:00:00Z"
+    OwnerOrderListEmpty:
+      summary: Empty incoming orders
+      value:
+        data: []
+    OwnerOrderStatusRequest:
+      summary: Update order status
+      value:
+        status: COOKING
+    OwnerVerifyApproveRequest:
+      summary: Approve payment
+      value:
+        action: APPROVE
+    OwnerVerifyRejectRequest:
+      summary: Reject payment
+      value:
+        action: REJECT
+        reason: Amount mismatch
+    OwnerVerifyPaymentSuccess:
+      summary: Verify payment response
+      value:
+        order:
+          id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+          user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+          canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+          payment_method: CASHLESS_QRIS
+          payment_status: PAID
+          order_status: WAITING
+          total_amount: 15000
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
+        verification:
+          id: 8a8a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+          order_id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+          canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+          user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+          status: APPROVED
+          rejection_reason: null
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
+        refund: null
+    OwnerFeedbackRemoveSuccess:
+      summary: Feedback removed
+      value:
+        feedback:
+          id: 6d6d3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
+          order_id: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
+          user_id: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
+          canteen_id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+          rating: null
+          comment: Fast service and tasty.
+          is_removed: true
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:05:00Z"
+    AdminCreateOwnerRequest:
+      summary: Create owner request
+      value:
+        name: Owner One
+        email: owner@example.com
+        password: password123
+        phone: "08123456789"
+    AdminOwnerSuccess:
+      summary: Owner created
+      value:
+        user:
+          id: 0b0c41f0-8c9e-4bb7-91e7-2aaf7f1c0a11
+          name: Owner One
+          email: owner@example.com
+          role: OWNER
+          phone: "08123456789"
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
+    AdminUpdateOwnerRequest:
+      summary: Update owner request
+      value:
+        name: Owner Updated
+        phone: "0899999999"
+    AdminDeleteAccountSuccess:
+      summary: Delete account success
+      value:
+        deleted: true
+    AdminUpdateQRISRequest:
+      summary: Update QRIS URL
+      value:
+        qris_static_url: https://example.com/qris.png
+    AdminUpdateQRISSuccess:
+      summary: Update QRIS success
+      value:
+        canteen:
+          id: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
+          name: BCC Canteen
+          location: Building A
+          owner_id: 0b0c41f0-8c9e-4bb7-91e7-2aaf7f1c0a11
+          qris_static_url: https://example.com/qris.png
+          qris_static_updated_at: "2026-02-05T10:00:00Z"
+          created_at: "2026-02-05T10:00:00Z"
+          updated_at: "2026-02-05T10:00:00Z"
 paths:
   /health:
     get:
+      tags:
+        - User
       summary: Health check
+      description: |-
+        Lightweight liveness endpoint to verify the service is running.
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                required:
+                  - status
+              examples:
+                success:
+                  value:
+                    status: ok
   /auth/register:
     post:
+      tags:
+        - Authentication
       summary: Register user
+      description: |-
+        Creates a new user account. Email is normalized to lowercase.
+        Passwords are hashed server-side. Returns the created user.
       requestBody:
         required: true
         content:
@@ -636,19 +1263,28 @@ paths:
               properties:
                 name:
                   type: string
+                  description: Display name.
                 email:
                   type: string
+                  description: Email address (lowercased during processing).
                 password:
                   type: string
+                  description: Plain-text password (hashed on server).
                 phone:
                   nullable: true
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Optional phone number.
               required:
                 - name
                 - email
                 - password
+            examples:
+              minimal:
+                $ref: "#/components/examples/RegisterRequestMinimal"
+              full:
+                $ref: "#/components/examples/RegisterRequestFull"
       responses:
         "201":
           description: Created
@@ -656,21 +1292,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+              examples:
+                success:
+                  $ref: "#/components/examples/RegisterSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "409":
           description: Email exists
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /auth/login:
     post:
+      tags:
+        - Authentication
       summary: Login
+      description: |-
+        Authenticates a user and returns a JWT access token. The token includes
+        claims: subject (user ID) and role. Expiration is enforced by the server.
       requestBody:
         required: true
         content:
@@ -680,11 +1330,16 @@ paths:
               properties:
                 email:
                   type: string
+                  description: Email address.
                 password:
                   type: string
+                  description: Plain-text password.
               required:
                 - email
                 - password
+            examples:
+              minimal:
+                $ref: "#/components/examples/LoginRequest"
       responses:
         "200":
           description: OK
@@ -692,21 +1347,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/LoginSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
   /canteens:
     get:
+      tags:
+        - User
       summary: List canteens
+      description: |-
+        Returns all canteens. Public endpoint. Use this for discovery.
       responses:
         "200":
           description: OK
@@ -714,15 +1382,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListResponseCanteen"
+              examples:
+                success:
+                  $ref: "#/components/examples/CanteenListSuccess"
+                empty:
+                  $ref: "#/components/examples/CanteenListEmpty"
   /canteens/{canteenId}/menus:
     get:
+      tags:
+        - User
       summary: List menu items by canteen with ratings
+      description: |-
+        Returns menu items for a canteen including aggregate ratings and recommendation flags.
       parameters:
         - in: path
           name: canteenId
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
       responses:
         "200":
           description: OK
@@ -730,21 +1410,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListResponseMenuItem"
+              examples:
+                success:
+                  $ref: "#/components/examples/MenuListSuccess"
+                empty:
+                  $ref: "#/components/examples/MenuListEmpty"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "404":
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
   /canteens/{canteenId}/ai/recommendation-explain:
     get:
+      tags:
+        - AI
       summary: Explain canteen or menu recommendation
+      description: |-
+        Returns an AI-generated explanation of why a canteen or menu item is recommended.
+        Read-only. Uses aggregated data only and does not reveal PII.
+        Requires any authenticated role (USER, OWNER, ADMIN).
       security:
         - bearerAuth: []
       parameters:
@@ -753,6 +1450,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
         - in: query
           name: days
           required: false
@@ -760,11 +1460,16 @@ paths:
             type: integer
             minimum: 7
             maximum: 90
+          description: Aggregation window in days.
+          example: 30
         - in: query
           name: menu_item_id
           required: false
           schema:
             type: string
+            format: uuid
+          description: Optional menu item ID to explain item-specific recommendation.
+          example: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
       responses:
         "200":
           description: OK
@@ -772,45 +1477,73 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AIRecommendationExplainResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/UserAIExplainSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "404":
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
         "502":
           description: AI error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ai_invalid_response:
+                  $ref: "#/components/examples/ErrorAIInvalidResponse"
         "503":
           description: AI not configured
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ai_not_configured:
+                  $ref: "#/components/examples/ErrorAINotConfigured"
   /orders:
     post:
+      tags:
+        - Orders
       summary: Create order
+      description: |-
+        Creates a new order with atomic stock locking. The operation is transactional:
+        stock is locked and decremented, order and items are created, or the entire
+        request fails. For CASHLESS_QRIS, order_status starts at PAYMENT.
+        Requires USER role; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       requestBody:
@@ -822,8 +1555,14 @@ paths:
               properties:
                 canteen_id:
                   type: string
+                  description: Canteen ID.
+                  format: uuid
                 payment_method:
                   type: string
+                  description: Payment method. Defaults to CASH.
+                  enum:
+                    - CASH
+                    - CASHLESS_QRIS
                 items:
                   type: array
                   items:
@@ -831,14 +1570,22 @@ paths:
                     properties:
                       menu_item_id:
                         type: string
+                        format: uuid
+                        description: Menu item ID.
                       qty:
                         type: integer
+                        description: Quantity (must be > 0).
                     required:
                       - menu_item_id
                       - qty
               required:
                 - canteen_id
                 - items
+            examples:
+              minimal:
+                $ref: "#/components/examples/CreateOrderMinimal"
+              full:
+                $ref: "#/components/examples/CreateOrderFull"
       responses:
         "201":
           description: Created
@@ -846,27 +1593,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CreateOrderResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/CreateOrderSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
   /orders/{orderId}/payments:
     post:
+      tags:
+        - Payments
       summary: Create payment
+      description: |-
+        Records a CASH payment for an order and marks payment_status=PAID.
+        Only valid for orders with payment_method=CASH.
+        Requires USER role; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -875,6 +1649,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Order ID.
+          example: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
       requestBody:
         required: true
         content:
@@ -884,11 +1661,18 @@ paths:
               properties:
                 method:
                   type: string
+                  description: Payment method label.
                 amount:
                   type: integer
+                  description: Must equal order total.
               required:
                 - method
                 - amount
+            examples:
+              minimal:
+                $ref: "#/components/examples/PaymentRequestMinimal"
+              full:
+                $ref: "#/components/examples/PaymentRequestFull"
       responses:
         "201":
           description: Created
@@ -896,27 +1680,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaymentOrderResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/PaymentSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /orders/{orderId}/feedback:
     post:
+      tags:
+        - Orders
       summary: Create feedback with ratings
+      description: |-
+        Creates feedback for a completed and paid order. Each menu item in the order
+        must be rated exactly once. Transactions ensure feedback and ratings are written together.
+        Requires USER role; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -925,6 +1745,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Order ID.
+          example: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
       requestBody:
         required: true
         content:
@@ -937,6 +1760,7 @@ paths:
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Optional free-form comment.
                 items:
                   type: array
                   items:
@@ -944,13 +1768,21 @@ paths:
                     properties:
                       menu_item_id:
                         type: string
+                        format: uuid
+                        description: Menu item ID.
                       rating:
                         type: integer
+                        description: Rating 1-5.
                     required:
                       - menu_item_id
                       - rating
               required:
                 - items
+            examples:
+              minimal:
+                $ref: "#/components/examples/FeedbackRequestMinimal"
+              full:
+                $ref: "#/components/examples/FeedbackRequestFull"
       responses:
         "201":
           description: Created
@@ -958,33 +1790,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FeedbackResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/FeedbackSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
         "409":
           description: Conflict
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /orders/{orderId}/payment/qris:
     get:
+      tags:
+        - Payments
       summary: Get QRIS payment info
+      description: |-
+        Returns QRIS static URL and order totals for cashless QRIS payments.
+        Only valid for orders with payment_method=CASHLESS_QRIS.
+        Requires USER role; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -993,6 +1855,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Order ID.
+          example: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
       responses:
         "200":
           description: OK
@@ -1000,39 +1865,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/QRISInfo"
+              examples:
+                success:
+                  $ref: "#/components/examples/QRISInfoSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "404":
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
         "409":
           description: Conflict
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /orders/{orderId}/payment/qris/confirm:
     post:
+      tags:
+        - Payments
       summary: Confirm QRIS payment
+      description: |-
+        Confirms a cashless QRIS payment. Sets payment_status=AWAITING_VERIFICATION
+        and order_status=WAITING. A verification record is created or updated.
+        Requires USER role; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -1041,6 +1930,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Order ID.
+          example: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
       responses:
         "200":
           description: OK
@@ -1048,39 +1940,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/QRISConfirmResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/QRISConfirmSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "404":
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
         "409":
           description: Conflict
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /owner/canteens/{canteenId}/menus:
     post:
+      tags:
+        - Owner
       summary: Create menu item
+      description: |-
+        Creates a new menu item for the specified canteen.
+        Requires OWNER role with ownership of the canteen; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -1089,6 +2004,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
       requestBody:
         required: true
         content:
@@ -1098,24 +2016,34 @@ paths:
               properties:
                 name:
                   type: string
+                  description: Menu item name.
                 description:
                   nullable: true
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Optional description.
                 price:
                   type: integer
+                  description: Price must be >= 0.
                 stock:
                   type: integer
+                  description: Stock must be >= 0.
                 is_available:
                   nullable: true
                   oneOf:
                     - type: boolean
                     - type: "null"
+                  description: Availability flag.
               required:
                 - name
                 - price
                 - stock
+            examples:
+              minimal:
+                $ref: "#/components/examples/OwnerMenuCreateMinimal"
+              full:
+                $ref: "#/components/examples/OwnerMenuCreateFull"
       responses:
         "201":
           description: Created
@@ -1123,27 +2051,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MenuItem"
+              examples:
+                success:
+                  $ref: "#/components/examples/OwnerMenuSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
   /owner/canteens/{canteenId}/menus/{menuId}:
     put:
+      tags:
+        - Owner
       summary: Update menu item
+      description: |-
+        Updates an existing menu item for a canteen.
+        Requires OWNER role with ownership of the canteen; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -1152,11 +2106,17 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
         - in: path
           name: menuId
           required: true
           schema:
             type: string
+            format: uuid
+          description: Menu item ID.
+          example: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
       requestBody:
         required: true
         content:
@@ -1166,22 +2126,30 @@ paths:
               properties:
                 name:
                   type: string
+                  description: Menu item name.
                 description:
                   nullable: true
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Optional description.
                 price:
                   type: integer
+                  description: Price must be >= 0.
                 stock:
                   type: integer
+                  description: Stock must be >= 0.
                 is_available:
                   type: boolean
+                  description: Availability flag.
               required:
                 - name
                 - price
                 - stock
                 - is_available
+            examples:
+              full:
+                $ref: "#/components/examples/OwnerMenuCreateFull"
       responses:
         "200":
           description: OK
@@ -1189,26 +2157,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MenuItem"
+              examples:
+                success:
+                  $ref: "#/components/examples/OwnerMenuSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
     delete:
+      tags:
+        - Owner
       summary: Delete menu item
+      description: |-
+        Deletes a menu item if it belongs to the canteen.
+        Requires OWNER role with ownership of the canteen; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -1217,11 +2202,17 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
         - in: path
           name: menuId
           required: true
           schema:
             type: string
+            format: uuid
+          description: Menu item ID.
+          example: 7c7a3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
       responses:
         "204":
           description: No content
@@ -1231,21 +2222,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
   /owner/canteens/{canteenId}/orders:
     get:
+      tags:
+        - Owner
       summary: List incoming orders
+      description: |-
+        Returns orders for a canteen, sorted by creation time.
+        Requires OWNER role with ownership of the canteen; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -1254,6 +2259,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
       responses:
         "200":
           description: OK
@@ -1261,27 +2269,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ListResponseOrder"
+              examples:
+                success:
+                  $ref: "#/components/examples/OwnerOrderListSuccess"
+                empty:
+                  $ref: "#/components/examples/OwnerOrderListEmpty"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
   /owner/canteens/{canteenId}/orders/{orderId}/status:
     patch:
+      tags:
+        - Owner
       summary: Update order status
+      description: |-
+        Updates order_status following the valid transition rules.
+        CASH orders can proceed without payment verification; CASHLESS_QRIS
+        orders require payment_status=PAID.
       security:
         - bearerAuth: []
       parameters:
@@ -1290,11 +2318,17 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
         - in: path
           name: orderId
           required: true
           schema:
             type: string
+            format: uuid
+          description: Order ID.
+          example: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
       requestBody:
         required: true
         content:
@@ -1304,8 +2338,17 @@ paths:
               properties:
                 status:
                   type: string
+                  description: Next order status.
+                  enum:
+                    - WAITING
+                    - COOKING
+                    - READY
+                    - COMPLETED
               required:
                 - status
+            examples:
+              minimal:
+                $ref: "#/components/examples/OwnerOrderStatusRequest"
       responses:
         "200":
           description: OK
@@ -1313,33 +2356,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Order"
+              examples:
+                success:
+                  $ref: "#/components/examples/OrderSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "409":
           description: Conflict
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /owner/canteens/{canteenId}/orders/{orderId}/payment/verify:
     patch:
+      tags:
+        - Owner
       summary: Verify QRIS payment
+      description: |-
+        Approves or rejects a CASHLESS_QRIS payment. APPROVE sets payment_status=PAID.
+        REJECT sets payment_status=REJECTED and creates a refund record.
       security:
         - bearerAuth: []
       parameters:
@@ -1348,11 +2411,17 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
         - in: path
           name: orderId
           required: true
           schema:
             type: string
+            format: uuid
+          description: Order ID.
+          example: 5e5b3d10-2f7c-4c7c-9e1a-6f2b8b9e0a22
       requestBody:
         required: true
         content:
@@ -1362,13 +2431,23 @@ paths:
               properties:
                 action:
                   type: string
+                  description: Verification action.
+                  enum:
+                    - APPROVE
+                    - REJECT
                 reason:
                   nullable: true
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Required when action=REJECT.
               required:
                 - action
+            examples:
+              approve:
+                $ref: "#/components/examples/OwnerVerifyApproveRequest"
+              reject:
+                $ref: "#/components/examples/OwnerVerifyRejectRequest"
       responses:
         "200":
           description: OK
@@ -1376,39 +2455,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OwnerVerifyPaymentResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/OwnerVerifyPaymentSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "404":
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
         "409":
           description: Conflict
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /owner/canteens/{canteenId}/feedbacks/{feedbackId}:
     delete:
+      tags:
+        - Owner
       summary: Remove feedback
+      description: |-
+        Soft-removes a feedback entry for a canteen. Requires ownership; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -1417,11 +2518,17 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
         - in: path
           name: feedbackId
           required: true
           schema:
             type: string
+            format: uuid
+          description: Feedback ID.
+          example: 6d6d3d10-2f7c-4c7c-9e1a-6f2b8b9e0a11
       responses:
         "200":
           description: OK
@@ -1429,27 +2536,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FeedbackResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/OwnerFeedbackRemoveSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
   /owner/canteens/{canteenId}/ai/feedback-insights:
     get:
+      tags:
+        - AI
       summary: AI feedback insights for owner
+      description: |-
+        Provides AI-generated insights for a canteen using aggregated feedback.
+        Read-only. No PII. Requires OWNER role with ownership; ADMIN bypass allowed.
       security:
         - bearerAuth: []
       parameters:
@@ -1458,6 +2582,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
         - in: query
           name: days
           required: false
@@ -1465,6 +2592,8 @@ paths:
             type: integer
             minimum: 7
             maximum: 90
+          description: Aggregation window in days.
+          example: 30
       responses:
         "200":
           description: OK
@@ -1472,45 +2601,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AIFeedbackInsightsResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/OwnerAIInsightsSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "404":
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
         "502":
           description: AI error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ai_invalid_response:
+                  $ref: "#/components/examples/ErrorAIInvalidResponse"
         "503":
           description: AI not configured
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ai_not_configured:
+                  $ref: "#/components/examples/ErrorAINotConfigured"
   /admin/owners:
     post:
+      tags:
+        - Admin
       summary: Create canteen owner
+      description: |-
+        Creates a new OWNER account. ADMIN only.
       security:
         - bearerAuth: []
       requestBody:
@@ -1522,19 +2676,26 @@ paths:
               properties:
                 name:
                   type: string
+                  description: Owner name.
                 email:
                   type: string
+                  description: Owner email.
                 password:
                   type: string
+                  description: Plain-text password (hashed on server).
                 phone:
                   nullable: true
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Optional phone number.
               required:
                 - name
                 - email
                 - password
+            examples:
+              full:
+                $ref: "#/components/examples/AdminCreateOwnerRequest"
       responses:
         "201":
           description: Created
@@ -1542,33 +2703,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/AdminOwnerSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "409":
           description: Email exists
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /admin/ai/oversight:
     get:
+      tags:
+        - AI
       summary: AI oversight watchlist
+      description: |-
+        Returns AI-generated watchlist signals for canteens based on aggregate feedback.
+        Read-only. ADMIN only.
       security:
         - bearerAuth: []
       parameters:
@@ -1579,6 +2760,8 @@ paths:
             type: integer
             minimum: 7
             maximum: 90
+          description: Aggregation window in days.
+          example: 30
       responses:
         "200":
           description: OK
@@ -1586,39 +2769,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AIOversightResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/AdminAIOversightSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "502":
           description: AI error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ai_invalid_response:
+                  $ref: "#/components/examples/ErrorAIInvalidResponse"
         "503":
           description: AI not configured
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                ai_not_configured:
+                  $ref: "#/components/examples/ErrorAINotConfigured"
   /admin/owners/{ownerId}:
     put:
+      tags:
+        - Admin
       summary: Update canteen owner
+      description: |-
+        Updates OWNER account fields. ADMIN only.
       security:
         - bearerAuth: []
       parameters:
@@ -1627,6 +2832,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Owner user ID.
+          example: 0b0c41f0-8c9e-4bb7-91e7-2aaf7f1c0a11
       requestBody:
         required: true
         content:
@@ -1639,21 +2847,28 @@ paths:
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Updated name.
                 email:
                   nullable: true
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Updated email.
                 password:
                   nullable: true
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Updated password (hashed server-side).
                 phone:
                   nullable: true
                   oneOf:
                     - type: string
                     - type: "null"
+                  description: Updated phone.
+            examples:
+              full:
+                $ref: "#/components/examples/AdminUpdateOwnerRequest"
       responses:
         "200":
           description: OK
@@ -1661,39 +2876,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/AdminOwnerSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "404":
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
         "409":
           description: Email exists
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /admin/accounts/{userId}:
     delete:
+      tags:
+        - Admin
       summary: Delete account
+      description: |-
+        Deletes a user account. ADMIN only. Deletion may fail if constraints exist.
       security:
         - bearerAuth: []
       parameters:
@@ -1702,6 +2939,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: User ID.
+          example: 2c2a5f1a-6b46-4a4c-b0d0-6b41e6e58811
       responses:
         "200":
           description: OK
@@ -1709,39 +2949,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DeleteResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/AdminDeleteAccountSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "404":
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
         "409":
           description: Conflict
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                conflict:
+                  $ref: "#/components/examples/ErrorConflict"
   /admin/canteens/{canteenId}/qris:
     put:
+      tags:
+        - Admin
       summary: Update canteen QRIS static URL
+      description: |-
+        Updates the QRIS static URL for a canteen. ADMIN only.
       security:
         - bearerAuth: []
       parameters:
@@ -1750,6 +3012,9 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
+          description: Canteen ID.
+          example: 9c3a3b71-9f8c-4b0b-86a9-4f5c0f9e0a11
       requestBody:
         required: true
         content:
@@ -1759,8 +3024,12 @@ paths:
               properties:
                 qris_static_url:
                   type: string
+                  description: Public QRIS static URL.
               required:
                 - qris_static_url
+            examples:
+              full:
+                $ref: "#/components/examples/AdminUpdateQRISRequest"
       responses:
         "200":
           description: OK
@@ -1768,27 +3037,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminCanteenResponse"
+              examples:
+                success:
+                  $ref: "#/components/examples/AdminUpdateQRISSuccess"
         "400":
           description: Validation error
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                validation_error:
+                  $ref: "#/components/examples/ErrorValidation"
         "401":
           description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                unauthorized:
+                  $ref: "#/components/examples/ErrorUnauthorized"
         "403":
           description: Forbidden
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  $ref: "#/components/examples/ErrorForbidden"
         "404":
           description: Not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                not_found:
+                  $ref: "#/components/examples/ErrorNotFound"
